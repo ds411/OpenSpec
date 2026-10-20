@@ -1711,6 +1711,53 @@ describe('InitCommand', () => {
     });
   });
 
+  describe('scan agent command', () => {
+    it.each(['both', 'skills', 'commands'] as const)(
+      'writes the scan command file for Claude Code with %s delivery',
+      async (delivery) => {
+        saveGlobalConfig({ featureFlags: {}, profile: 'core', delivery });
+        await new InitCommand({ tools: 'claude', force: true }).execute(testDir);
+
+        const scanFile = path.join(testDir, '.claude', 'commands', 'opsx', 'scan.md');
+        const content = await fs.readFile(scanFile, 'utf-8');
+        const frontmatter = parseYaml(content.match(/^---\n([\s\S]*?)\n---\n/)![1]);
+        expect(frontmatter['disable-model-invocation']).toBe(true);
+        expect(content).toContain('**Phase 1: Survey (lead)**');
+
+        // A command only: no skill and no subagent definitions load into context.
+        const skillsDir = path.join(testDir, '.claude', 'skills');
+        const skills = (await directoryExists(skillsDir)) ? await fs.readdir(skillsDir) : [];
+        expect(skills.some((name) => name.includes('scan'))).toBe(false);
+        expect(await directoryExists(path.join(testDir, '.claude', 'agents'))).toBe(false);
+      }
+    );
+
+    it('writes the scan command for a custom profile without it', async () => {
+      saveGlobalConfig({ featureFlags: {}, profile: 'custom', delivery: 'both', workflows: ['explore'] });
+      await new InitCommand({ tools: 'cursor', force: true }).execute(testDir);
+
+      expect((await fs.readdir(path.join(testDir, '.cursor', 'commands'))).sort()).toEqual([
+        'opsx-explore.md',
+        'opsx-scan.md',
+      ]);
+    });
+
+    it('skips the scan command for a skills-only tool and says so', async () => {
+      await new InitCommand({ tools: 'claude,codex', force: true }).execute(testDir);
+
+      expect(await fileExists(path.join(testDir, '.claude', 'commands', 'opsx', 'scan.md'))).toBe(true);
+      const output = vi.mocked(console.log).mock.calls.flat().map(String).join('\n');
+      expect(output).toContain("Agent command 'scan' not written for: Codex. This tool supports only skills.");
+    });
+
+    it('prints no skip note when every tool got the scan command', async () => {
+      await new InitCommand({ tools: 'claude', force: true }).execute(testDir);
+
+      const output = vi.mocked(console.log).mock.calls.flat().map(String).join('\n');
+      expect(output).not.toContain("Agent command 'scan' not written");
+    });
+  });
+
   describe('tool-specific adapters', () => {
     it.each(['both', 'skills', 'commands'] as const)(
       'should generate usable AtomCode workflows with %s delivery',
@@ -1722,7 +1769,11 @@ describe('InitCommand', () => {
         const commandsDir = path.join(testDir, '.atomcode', 'commands');
         const applySkill = path.join(skillsDir, 'openspec-apply-change', 'SKILL.md');
         expect(await fileExists(applySkill)).toBe(delivery !== 'commands');
-        expect(await directoryExists(commandsDir)).toBe(delivery !== 'skills');
+        // The scan agent command is written whatever the delivery setting is.
+        expect(await directoryExists(commandsDir)).toBe(true);
+        if (delivery === 'skills') {
+          expect(await fs.readdir(commandsDir)).toEqual(['opsx-scan.md']);
+        }
 
         if (delivery !== 'commands') {
           const content = await fs.readFile(applySkill, 'utf-8');
@@ -1734,7 +1785,7 @@ describe('InitCommand', () => {
           const commandFiles = await fs.readdir(commandsDir);
           expect(commandFiles.sort()).toEqual([
             'opsx-apply.md', 'opsx-archive.md', 'opsx-explore.md',
-            'opsx-propose.md', 'opsx-sync.md', 'opsx-update.md',
+            'opsx-propose.md', 'opsx-scan.md', 'opsx-sync.md', 'opsx-update.md',
           ]);
           for (const filename of commandFiles) {
             const content = await fs.readFile(path.join(commandsDir, filename), 'utf-8');
@@ -1759,7 +1810,7 @@ describe('InitCommand', () => {
       await initCommand.execute(testDir);
 
       const commandsDir = path.join(testDir, `.${toolId}`, 'commands', 'opsx');
-      const commandIds = ['apply', 'archive', 'explore', 'propose', 'sync', 'update'];
+      const commandIds = ['apply', 'archive', 'explore', 'propose', 'scan', 'sync', 'update'];
       expect((await fs.readdir(commandsDir)).sort()).toEqual(commandIds.map((id) => `${id}.toml`));
       for (const commandId of commandIds) {
         const content = parseToml(await fs.readFile(path.join(commandsDir, `${commandId}.toml`), 'utf-8'));
@@ -1785,10 +1836,10 @@ describe('InitCommand', () => {
 
         const commandsDir = path.join(testDir, '.easycode', 'commands', 'opsx');
         if (delivery === 'skills') {
-          expect(await directoryExists(commandsDir)).toBe(false);
+          expect(await fs.readdir(commandsDir)).toEqual(['scan.toml']);
         } else {
-          expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'new.toml']);
-          for (const filename of ['explore.toml', 'new.toml']) {
+          expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'new.toml', 'scan.toml']);
+          for (const filename of ['explore.toml', 'new.toml', 'scan.toml']) {
             const content = parseToml(await fs.readFile(path.join(commandsDir, filename), 'utf-8'));
             expect(content.description).toEqual(expect.any(String));
             expect(content.prompt).toContain('openspec');

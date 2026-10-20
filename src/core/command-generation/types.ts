@@ -22,6 +22,12 @@ export interface CommandContent {
   tags: string[];
   /** The command instruction content (body text) */
   body: string;
+  /**
+   * True when only the user may start the command. Adapters for tools that
+   * put command descriptions in the model context (Claude Code) mark the file
+   * so that its description stays out of the context until the user runs it.
+   */
+  disableModelInvocation?: boolean;
 }
 
 /**

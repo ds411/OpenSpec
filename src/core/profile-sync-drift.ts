@@ -4,7 +4,7 @@ import { AI_TOOLS } from './config.js';
 import type { Delivery } from './global-config.js';
 import { ALL_WORKFLOWS } from './profiles.js';
 import { CommandAdapterRegistry } from './command-generation/index.js';
-import { getConfiguredTools } from './shared/index.js';
+import { getConfiguredTools, hasAgentCommandDrift } from './shared/index.js';
 import {
   shouldGenerateCommandsForTool,
   shouldGenerateSkillsForTool,
@@ -61,6 +61,7 @@ export function getConfiguredToolsForProfileSync(projectPath: string): string[] 
  * - required artifacts missing for selected workflows
  * - artifacts that should not exist for the selected delivery mode
  * - artifacts for workflows that were deselected from the current profile
+ * - agent command files (which ignore profile and delivery) missing or stale
  */
 export function hasToolProfileOrDeliveryDrift(
   projectPath: string,
@@ -172,7 +173,8 @@ export function hasToolProfileOrDeliveryDrift(
     }
   }
 
-  return false;
+  // @trace REQ-0372
+  return hasAgentCommandDrift(projectPath, toolId);
 }
 
 /**

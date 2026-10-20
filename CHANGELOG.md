@@ -1,5 +1,14 @@
 # @fission-ai/openspec
 
+## 1.14.3+fork.3
+
+Fork release on top of upstream 1.14.3. Fork versions are `<upstream version>+fork.<patch number>`.
+
+### Features
+
+- **`/opsx:scan` agent command** — A lead agent and a team of helper agents scan a repository with full, partial or no OpenSpec coverage. They write Gherkin requirements for the behavior that the code has now, and add `@trace` comments at the code that implements each requirement. The lead surveys the specs and traces, helpers write the rules for each area in parallel, the lead alone runs `openspec ids assign`, helpers add the traces, and the lead verifies with `openspec validate --strict` and `openspec trace check`. It writes to `openspec/specs/` by default, or to a change with `--as-change <name>`.
+- **Agent commands** — An agent command is a command file only, never a skill, so nothing loads into the agent context until you run it. `openspec init` and `openspec update` write it for every configured tool with command files, whatever the profile and delivery settings are, and print a note for tools that support only skills. In Claude Code the file sets `disable-model-invocation: true`. `openspec update` rewrites an agent command file that is missing or changed.
+
 ## 1.14.3+fork.2
 
 Fork release on top of upstream 1.14.3. Fork versions are `<upstream version>+fork.<patch number>`.
