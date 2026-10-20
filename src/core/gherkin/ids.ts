@@ -5,7 +5,7 @@
  * (`@REQ-0001`). An ID is `REQ-` followed by at least four digits. IDs are
  * handed out by a counter that only goes up, so an ID is never reused, not
  * even after its requirement is removed. Code points back at a requirement
- * by its ID (`@trace REQ-0001`).
+ * by its ID, in a `@trace` comment that names the ID.
  */
 
 export const REQUIREMENT_ID_PREFIX = 'REQ-';
