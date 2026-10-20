@@ -19,9 +19,9 @@ describe('top-level show command', () => {
     await fs.mkdir(path.join(changesDir, 'demo'), { recursive: true });
     await fs.writeFile(path.join(changesDir, 'demo', 'proposal.md'), changeContent, 'utf-8');
 
-    const specContent = `## Purpose\nAuth spec.\n\n## Requirements\n\n### Requirement: User Authentication\nText\n`;
+    const specContent = `Feature: Auth\n  Auth spec.\n\n  @REQ-0001\n  Rule: User Authentication\n    Text\n`;
     await fs.mkdir(path.join(specsDir, 'auth'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'auth', 'spec.md'), specContent, 'utf-8');
+    await fs.writeFile(path.join(specsDir, 'auth', 'spec.feature'), specContent, 'utf-8');
   });
 
   afterEach(async () => {
@@ -103,7 +103,7 @@ describe('top-level show command', () => {
     await fs.mkdir(path.join(changesDir, 'foo'), { recursive: true });
     await fs.writeFile(path.join(changesDir, 'foo', 'proposal.md'), '# Change: Foo\n\n## Why\n\n## What Changes\n', 'utf-8');
     await fs.mkdir(path.join(specsDir, 'foo'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'foo', 'spec.md'), '## Purpose\n\n## Requirements\n\n### Requirement: R\nX', 'utf-8');
+    await fs.writeFile(path.join(specsDir, 'foo', 'spec.feature'), 'Feature: Foo\n\n  @REQ-0001\n  Rule: R\n    X\n', 'utf-8');
 
     const originalCwd = process.cwd();
     try {

@@ -25,32 +25,30 @@ describe('validate command enriched human output', () => {
     const deltaDir = path.join(changeDir, 'specs', 'widgets');
     await fs.mkdir(mainDir, { recursive: true });
     await fs.mkdir(deltaDir, { recursive: true });
-    await fs.writeFile(path.join(mainDir, 'spec.md'), `# Widgets Specification
+    await fs.writeFile(path.join(mainDir, 'spec.feature'), `Feature: Widgets
+  Define how widgets report their existing state consistently to all callers.
 
-## Purpose
-Define how widgets report their existing state consistently to all callers.
+  @REQ-0001
+  Rule: Existing state
+    The system SHALL report the existing state.
 
-## Requirements
-
-### Requirement: Existing state
-The system SHALL report the existing state.
-
-#### Scenario: Query state
-- **WHEN** queried
-- **THEN** the state is reported
+    Scenario: Query state
+      When queried
+      Then the state is reported
 `);
     await fs.writeFile(
       path.join(changeDir, 'proposal.md'),
       '# Widget update\n\n## Why\nUpdate widgets.\n\n## What Changes\n- Update state reporting\n'
     );
-    await fs.writeFile(path.join(deltaDir, 'spec.md'), `## MODIFIED Requirements
+    await fs.writeFile(path.join(deltaDir, 'spec.feature'), `Feature: Widgets
 
-### Requirement: Future state
-The system SHALL report the future state.
+  @modified @REQ-0002
+  Rule: Future state
+    The system SHALL report the future state.
 
-#### Scenario: Query state
-- **WHEN** queried
-- **THEN** the state is reported
+    Scenario: Query state
+      When queried
+      Then the state is reported
 `);
   };
 
@@ -71,7 +69,7 @@ The system SHALL report the future state.
         const result = await runCLI([...invocation, '--no-interactive'], { cwd: testDir });
 
         expect(result.exitCode).toBe(0);
-        expect(result.stderr).toContain('ℹ [INFO] widgets/spec.md: Archive would refuse this delta:');
+        expect(result.stderr).toContain('ℹ [INFO] widgets/spec.feature: Archive would refuse this delta:');
         expect(result.stderr).toContain('Future state');
         expect(result.stderr).not.toContain('Next steps:');
         expect(result.stdout).toMatch(/is valid|0 failed/);
@@ -90,7 +88,7 @@ The system SHALL report the future state.
         expect(report.valid).toBe(true);
         expect(report.issues).toContainEqual(expect.objectContaining({
           level: 'INFO',
-          path: 'widgets/spec.md',
+          path: 'widgets/spec.feature',
           message: expect.stringContaining('Archive would refuse this delta:'),
         }));
         expect(result.stderr).not.toContain('Archive would refuse this delta:');
@@ -105,11 +103,11 @@ The system SHALL report the future state.
         `reports an incomplete archive check without failing ${args.join(' ')}${json ? ' --json' : ''}`,
         async () => {
           await writeArchiveBlocker();
-          const deltaFile = path.join(changesDir, 'c-archive', 'specs', 'widgets', 'spec.md');
+          const deltaFile = path.join(changesDir, 'c-archive', 'specs', 'widgets', 'spec.feature');
           const delta = await fs.readFile(deltaFile, 'utf-8');
-          await fs.writeFile(deltaFile, delta.replace('## MODIFIED Requirements', '## ADDED Requirements'));
-          const mainFile = path.join(testDir, 'openspec', 'specs', 'widgets', 'spec.md');
-          const missingFile = path.join(testDir, 'missing-spec.md');
+          await fs.writeFile(deltaFile, delta.replace('@modified', '@added'));
+          const mainFile = path.join(testDir, 'openspec', 'specs', 'widgets', 'spec.feature');
+          const missingFile = path.join(testDir, 'missing-spec.feature');
           await fs.unlink(mainFile);
           await fs.symlink(missingFile, mainFile);
 
@@ -144,14 +142,14 @@ The system SHALL report the future state.
     const invalidDir = path.join(changesDir, 'c-archive', 'specs', 'broken');
     await fs.mkdir(invalidDir, { recursive: true });
     await fs.writeFile(
-      path.join(invalidDir, 'spec.md'),
-      '## ADDED Requirements\n\n### Requirement: Missing scenario\nThe system SHALL do something.\n'
+      path.join(invalidDir, 'spec.feature'),
+      'Feature: Broken\n\n  @added @REQ-0003\n  Rule: Missing scenario\n    The system SHALL do something.\n'
     );
 
     const result = await runCLI(['change', 'validate', 'c-archive', '--no-interactive'], { cwd: testDir });
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('ℹ [INFO] widgets/spec.md: Archive would refuse this delta:');
+    expect(result.stderr).toContain('ℹ [INFO] widgets/spec.feature: Archive would refuse this delta:');
     expect(result.stderr).toContain('[ERROR]');
     expect(result.stderr).toContain('Next steps:');
   });
