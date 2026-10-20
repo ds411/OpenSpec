@@ -16,7 +16,7 @@ async function withTempDir(run: (dir: string) => Promise<void>) {
 async function writeSpec(root: string, ...segments: string[]) {
   const dir = path.join(root, ...segments);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, 'spec.md'), '# Spec\n', 'utf8');
+  await fs.writeFile(path.join(dir, 'spec.feature'), '# Spec\n', 'utf8');
 }
 
 describe('discoverSpecFiles', () => {
@@ -27,7 +27,7 @@ describe('discoverSpecFiles', () => {
 
       const found = await discoverSpecFiles(dir);
       expect(found.map((s) => s.id)).toEqual(['auth', 'payments']);
-      expect(found[0].specFile).toBe(path.join(dir, 'auth', 'spec.md'));
+      expect(found[0].specFile).toBe(path.join(dir, 'auth', 'spec.feature'));
     });
   });
 
@@ -44,14 +44,14 @@ describe('discoverSpecFiles', () => {
         'platform/platform-session-layout',
       ]);
       expect(found[2].specFile).toBe(
-        path.join(dir, 'platform', 'platform-session-layout', 'spec.md')
+        path.join(dir, 'platform', 'platform-session-layout', 'spec.feature')
       );
     });
   });
 
-  it('ignores a spec.md directly in the root, dot-directories, and non-spec files', async () => {
+  it('ignores a spec.feature directly in the root, dot-directories, and non-spec files', async () => {
     await withTempDir(async (dir) => {
-      await fs.writeFile(path.join(dir, 'spec.md'), '# Root spec\n', 'utf8');
+      await fs.writeFile(path.join(dir, 'spec.feature'), '# Root spec\n', 'utf8');
       await writeSpec(dir, '.hidden', 'secret');
       await writeSpec(dir, 'real');
       await fs.writeFile(path.join(dir, 'real', 'design.md'), '# Design\n', 'utf8');
@@ -108,39 +108,39 @@ describe('discoverSpecFiles', () => {
     });
   });
 
-  it.skipIf(process.platform === 'win32')('discovers an in-capability symlinked spec.md file', async () => {
+  it.skipIf(process.platform === 'win32')('discovers an in-capability symlinked spec.feature file', async () => {
     await withTempDir(async (dir) => {
       // hasAnyFileUnder and the artifact graph's globs both count a symlinked
-      // spec.md as content, so discovery must not silently drop it.
+      // spec.feature as content, so discovery must not silently drop it.
       await fs.mkdir(path.join(dir, 'auth'), { recursive: true });
       const target = path.join(dir, 'auth', 'shared-delta.md');
       await fs.writeFile(target, '# Spec\n', 'utf8');
-      await fs.symlink(target, path.join(dir, 'auth', 'spec.md'), 'file');
+      await fs.symlink(target, path.join(dir, 'auth', 'spec.feature'), 'file');
 
       const found = await discoverSpecFiles(dir);
       expect(found.map((s) => s.id)).toEqual(['auth']);
-      expect(found[0].specFile).toBe(path.join(dir, 'auth', 'spec.md'));
+      expect(found[0].specFile).toBe(path.join(dir, 'auth', 'spec.feature'));
     });
   });
 
-  it.skipIf(process.platform === 'win32')('discovers a spec.md symlink elsewhere in the specs root', async () => {
+  it.skipIf(process.platform === 'win32')('discovers a spec.feature symlink elsewhere in the specs root', async () => {
     await withTempDir(async (dir) => {
       const target = path.join(dir, 'shared.md');
       await fs.writeFile(target, '# Shared\n', 'utf8');
       await fs.mkdir(path.join(dir, 'auth'), { recursive: true });
-      await fs.symlink(target, path.join(dir, 'auth', 'spec.md'), 'file');
+      await fs.symlink(target, path.join(dir, 'auth', 'spec.feature'), 'file');
 
       const found = await discoverSpecFiles(dir);
       expect(found.map((s) => s.id)).toEqual(['auth']);
     });
   });
 
-  it.skipIf(process.platform === 'win32')('rejects a spec.md symlink outside the specs root', async () => {
+  it.skipIf(process.platform === 'win32')('rejects a spec.feature symlink outside the specs root', async () => {
     await withTempDir(async (dir) => {
       const target = path.join(path.dirname(dir), `${path.basename(dir)}-outside.md`);
       await fs.writeFile(target, '# Outside\n', 'utf8');
       await fs.mkdir(path.join(dir, 'auth'), { recursive: true });
-      await fs.symlink(target, path.join(dir, 'auth', 'spec.md'), 'file');
+      await fs.symlink(target, path.join(dir, 'auth', 'spec.feature'), 'file');
 
       await expect(discoverSpecFiles(dir)).rejects.toThrow(
         'Path is outside the allowed directory'
@@ -150,17 +150,17 @@ describe('discoverSpecFiles', () => {
   });
 
   it.skipIf(process.platform === 'win32')(
-    'discovers a spec.md linked to a file elsewhere in the project (#2100)',
+    'discovers a spec.feature linked to a file elsewhere in the project (#2100)',
     async () => {
       await withTempDir(async (dir) => {
         // The project keeps its specs beside the product documentation and
-        // links openspec/specs/<capability>/spec.md to them.
+        // links openspec/specs/<capability>/spec.feature to them.
         const specsRoot = path.join(dir, 'repo', 'openspec', 'specs');
         const docsSpec = path.join(dir, 'repo', 'docs', 'auth', 'specs', 'login.md');
         await fs.mkdir(path.join(specsRoot, 'login'), { recursive: true });
         await fs.mkdir(path.dirname(docsSpec), { recursive: true });
         await fs.writeFile(docsSpec, '# login\n', 'utf8');
-        const link = path.join(specsRoot, 'login', 'spec.md');
+        const link = path.join(specsRoot, 'login', 'spec.feature');
         await fs.symlink(path.relative(path.dirname(link), docsSpec), link, 'file');
 
         const found = await discoverSpecFiles(specsRoot);
@@ -171,14 +171,14 @@ describe('discoverSpecFiles', () => {
   );
 
   it.skipIf(process.platform === 'win32')(
-    'rejects a spec.md symlink that leaves the project (#2100)',
+    'rejects a spec.feature symlink that leaves the project (#2100)',
     async () => {
       await withTempDir(async (dir) => {
         const specsRoot = path.join(dir, 'repo', 'openspec', 'specs');
         const outside = path.join(dir, 'outside.md');
         await fs.mkdir(path.join(specsRoot, 'login'), { recursive: true });
         await fs.writeFile(outside, '# Outside\n', 'utf8');
-        await fs.symlink(outside, path.join(specsRoot, 'login', 'spec.md'), 'file');
+        await fs.symlink(outside, path.join(specsRoot, 'login', 'spec.feature'), 'file');
 
         await expect(discoverSpecFiles(specsRoot)).rejects.toThrow(
           'Path is outside the allowed directory'
@@ -187,13 +187,13 @@ describe('discoverSpecFiles', () => {
     }
   );
 
-  it.skipIf(process.platform === 'win32')('skips a dangling spec.md symlink', async () => {
+  it.skipIf(process.platform === 'win32')('skips a dangling spec.feature symlink', async () => {
     await withTempDir(async (dir) => {
       await writeSpec(dir, 'real');
       await fs.mkdir(path.join(dir, 'ghost'), { recursive: true });
       await fs.symlink(
         path.join(dir, 'missing-target.md'),
-        path.join(dir, 'ghost', 'spec.md'),
+        path.join(dir, 'ghost', 'spec.feature'),
         'file'
       );
 

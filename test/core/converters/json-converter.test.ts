@@ -17,22 +17,19 @@ describe('JsonConverter', () => {
 
   describe('convertSpecToJson', () => {
     it('should convert a spec to JSON format', async () => {
-      const specContent = `# User Authentication Spec
+      const specContent = `Feature: User Authentication
+  This specification defines the requirements for user authentication.
 
-## Purpose
-This specification defines the requirements for user authentication.
+  @REQ-0001
+  Rule: Secure user authentication
+    The system SHALL provide secure user authentication.
 
-## Requirements
+    Scenario: Successful login
+      Given a user with valid credentials
+      When they submit the login form
+      Then they are authenticated`;
 
-### The system SHALL provide secure user authentication
-Users need to be able to log in securely.
-
-#### Scenario: Successful login
-Given a user with valid credentials
-When they submit the login form
-Then they are authenticated`;
-
-      const specPath = path.join(testDir, 'spec.md');
+      const specPath = path.join(testDir, 'spec.feature');
       await fs.writeFile(specPath, specContent);
       
       const json = converter.convertSpecToJson(specPath);
@@ -41,6 +38,7 @@ Then they are authenticated`;
       expect(parsed.name).toBe('spec');
       expect(parsed.overview).toContain('user authentication');
       expect(parsed.requirements).toHaveLength(1);
+      expect(parsed.requirements[0].id).toBe('REQ-0001');
       expect(parsed.requirements[0].scenarios).toHaveLength(1);
       expect(parsed.metadata).toBeDefined();
       expect(parsed.metadata.format).toBe('openspec');
@@ -51,21 +49,19 @@ Then they are authenticated`;
       const specsDir = path.join(testDir, 'specs', 'user-auth');
       await fs.mkdir(specsDir, { recursive: true });
       
-      const specContent = `# User Auth
+      const specContent = `Feature: User Auth
+  Auth spec overview
 
-## Purpose
-Auth spec overview
+  @REQ-0001
+  Rule: Authenticate users
+    The system SHALL authenticate users.
 
-## Requirements
+    Scenario: Login
+      Given a user
+      When they login
+      Then authenticated`;
 
-### The system SHALL authenticate users
-
-#### Scenario: Login
-Given a user
-When they login
-Then authenticated`;
-
-      const specPath = path.join(specsDir, 'spec.md');
+      const specPath = path.join(specsDir, 'spec.feature');
       await fs.writeFile(specPath, specContent);
       
       const json = converter.convertSpecToJson(specPath);
@@ -126,21 +122,19 @@ We need authentication for security reasons and to protect user data properly.
 
   describe('JSON formatting', () => {
     it('should produce properly formatted JSON with indentation', async () => {
-      const specContent = `# Test
+      const specContent = `Feature: Test
+  Test overview
 
-## Purpose
-Test overview
+  @REQ-0001
+  Rule: Test
+    The system SHALL test.
 
-## Requirements
+    Scenario: Test
+      Given test
+      When action
+      Then result`;
 
-### The system SHALL test
-
-#### Scenario: Test
-Given test
-When action
-Then result`;
-
-      const specPath = path.join(testDir, 'spec.md');
+      const specPath = path.join(testDir, 'spec.feature');
       await fs.writeFile(specPath, specContent);
       
       const json = converter.convertSpecToJson(specPath);
@@ -155,22 +149,20 @@ Then result`;
     });
 
     it('should handle special characters in content', async () => {
-      const specContent = `# Test
+      const specContent = `Feature: Test
+  This has "quotes" and \\ backslashes and
+  newlines
 
-## Purpose
-This has "quotes" and \\ backslashes and
-newlines
+  @REQ-0001
+  Rule: Special characters
+    The system SHALL handle "special" characters.
 
-## Requirements
+    Scenario: Special chars
+      Given a string with "quotes"
+      When processing \\ backslash
+      Then handle correctly`;
 
-### The system SHALL handle "special" characters
-
-#### Scenario: Special chars
-Given a string with "quotes"
-When processing \\ backslash
-Then handle correctly`;
-
-      const specPath = path.join(testDir, 'spec.md');
+      const specPath = path.join(testDir, 'spec.feature');
       await fs.writeFile(specPath, specContent);
       
       const json = converter.convertSpecToJson(specPath);
