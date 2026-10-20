@@ -44,7 +44,7 @@ describe('capstone persona journeys (6.1)', () => {
     writeSpec(
       storeRoot,
       'billing-rules',
-      '## Purpose\n\nAll invoices are immutable after issue.\n'
+      'Feature: billing-rules\n  All invoices are immutable after issue.\n'
     );
     await registerStore({
       id: 'product-requirements',
@@ -149,13 +149,13 @@ describe('capstone persona journeys (6.1)', () => {
       expect(artifactStatus.exitCode).toBe(0);
       const target =
         artifact.id === 'specs'
-          ? path.join(changeDir, 'specs', 'api', 'spec.md')
+          ? path.join(changeDir, 'specs', 'api', 'spec.feature')
           : path.join(changeDir, `${artifact.id}.md`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(
         target,
         artifact.id === 'specs'
-          ? '## ADDED Requirements\n\n### Requirement: Rate limits\nThe API SHALL rate-limit.\n\n#### Scenario: Limit hit\n- **WHEN** the limit is exceeded\n- **THEN** requests are rejected\n'
+          ? 'Feature: api\n\n  @added @REQ-0001\n  Rule: Rate limits\n    The API SHALL rate-limit.\n\n    Scenario: Limit hit\n      When the limit is exceeded\n      Then requests are rejected\n'
           : `# ${artifact.id}\n\nDone.\n`
       );
     }

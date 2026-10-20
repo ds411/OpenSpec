@@ -13,20 +13,17 @@ async function prepareNonEnglishSpec(): Promise<string> {
   const specDir = path.join(projectDir, 'openspec', 'specs', '日志记录');
   await fs.mkdir(specDir, { recursive: true });
   await fs.writeFile(
-    path.join(specDir, 'spec.md'),
-    `# 日志记录
+    path.join(specDir, 'spec.feature'),
+    `Feature: 日志记录
+  记录应用程序中的重要事件，以便团队能够诊断问题、调查故障、审计活动并了解长期的系统行为。
 
-## Purpose
-记录应用程序中的重要事件，以便团队能够诊断问题、调查故障、审计活动并了解长期的系统行为。
+  @REQ-0001
+  Rule: 事件记录
+    系统必须记录应用程序中的重要事件。
 
-## Requirements
-
-### Requirement: 事件记录
-系统必须记录应用程序中的重要事件。
-
-#### Scenario: 事件发生
-- **WHEN** 应用程序生成重要事件
-- **THEN** 系统保存该事件
+    Scenario: 事件发生
+      When 应用程序生成重要事件
+      Then 系统保存该事件
 `
   );
   return projectDir;
@@ -46,17 +43,16 @@ async function prepareNonEnglishChange(): Promise<string> {
   );
   await fs.mkdir(specDir, { recursive: true });
   await fs.writeFile(
-    path.join(specDir, 'spec.md'),
-    `# 日志记录变更
+    path.join(specDir, 'spec.feature'),
+    `Feature: 日志记录
 
-## ADDED Requirements
+  @added @REQ-0001
+  Rule: 事件记录
+    系统必须记录应用程序中的重要事件。
 
-### Requirement: 事件记录
-系统必须记录应用程序中的重要事件。
-
-#### Scenario: 事件发生
-- **WHEN** 应用程序生成重要事件
-- **THEN** 系统保存该事件
+    Scenario: 事件发生
+      When 应用程序生成重要事件
+      Then 系统保存该事件
 `
   );
   return projectDir;

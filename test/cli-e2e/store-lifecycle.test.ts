@@ -106,7 +106,8 @@ async function listRelativeEntries(root: string, skipDirs: Set<string>): Promise
 
 async function writeCompletedChangeArtifacts(
   changeDir: string,
-  capability: string
+  capability: string,
+  requirementId: string
 ): Promise<void> {
   await fs.writeFile(
     path.join(changeDir, 'proposal.md'),
@@ -141,20 +142,17 @@ async function writeCompletedChangeArtifacts(
 
   await fs.mkdir(path.join(changeDir, 'specs', capability), { recursive: true });
   await fs.writeFile(
-    path.join(changeDir, 'specs', capability, 'spec.md'),
+    path.join(changeDir, 'specs', capability, 'spec.feature'),
     [
-      `# ${capability} Spec Delta`,
+      `Feature: ${capability}`,
       '',
-      '## ADDED Requirements',
+      `  @added @${requirementId}`,
+      `  Rule: ${capability} SHALL work`,
+      `    The system SHALL support ${capability}.`,
       '',
-      `### Requirement: ${capability} SHALL work`,
-      '',
-      `The system SHALL support ${capability}.`,
-      '',
-      '#### Scenario: It works',
-      '',
-      '- **WHEN** the lifecycle runs',
-      '- **THEN** the capability exists',
+      '    Scenario: It works',
+      '      When the lifecycle runs',
+      '      Then the capability exists',
       '',
     ].join('\n'),
     'utf-8'
@@ -298,7 +296,7 @@ describe('standalone store lifecycle journey', () => {
 
     // The test acts as the agent and writes the artifacts.
     const changeDir = path.join(storeRoot, 'openspec', 'changes', changeId);
-    await writeCompletedChangeArtifacts(changeDir, 'billing');
+    await writeCompletedChangeArtifacts(changeDir, 'billing', 'REQ-0001');
 
     const validated = await runCLI(
       ['validate', changeId, '--store', STORE_ID],
@@ -332,7 +330,7 @@ describe('standalone store lifecycle journey', () => {
     expect(archivePayload.archive.change).toBe(changeId);
     expect(archivePayload.root.store_id).toBe(STORE_ID);
 
-    const specPath = path.join(storeRoot, 'openspec', 'specs', 'billing', 'spec.md');
+    const specPath = path.join(storeRoot, 'openspec', 'specs', 'billing', 'spec.feature');
     await expect(fs.readFile(specPath, 'utf-8')).resolves.toContain('billing SHALL work');
 
     const archiveEntries = await fs.readdir(
@@ -416,7 +414,7 @@ describe('standalone store lifecycle journey', () => {
     );
 
     const changeDir = path.join(cloneRoot, 'openspec', 'changes', changeId);
-    await writeCompletedChangeArtifacts(changeDir, 'invoicing');
+    await writeCompletedChangeArtifacts(changeDir, 'invoicing', 'REQ-0002');
 
     const status = await runCLI(
       ['status', '--change', changeId, '--store', STORE_ID],
@@ -446,7 +444,7 @@ describe('standalone store lifecycle journey', () => {
     expect(archived.exitCode).toBe(0);
     expect(JSON.parse(archived.stdout).archive.change).toBe(changeId);
 
-    const specPath = path.join(cloneRoot, 'openspec', 'specs', 'invoicing', 'spec.md');
+    const specPath = path.join(cloneRoot, 'openspec', 'specs', 'invoicing', 'spec.feature');
     await expect(fs.readFile(specPath, 'utf-8')).resolves.toContain('invoicing SHALL work');
 
     // Post-resolution failures keep the banner, and the hint keeps the store:
