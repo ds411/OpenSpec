@@ -140,7 +140,7 @@ export function parseFeature(content: string): FeatureDocument {
   const ruleStarts = ruleNodes.map((rule) => ruleStartLine(rule, lines));
   const rules = ruleNodes.map((rule, index) => {
     const nextStart = index + 1 < ruleStarts.length ? ruleStarts[index + 1] : lines.length + 1;
-    return toRule(rule, ruleStarts[index], lastContentLine(lines, nextStart - 1));
+    return toRule(rule, ruleStarts[index], ruleEndLine(lines, nextStart - 1));
   });
 
   return {
@@ -265,6 +265,20 @@ function lastContentLine(lines: string[], line: number): number {
   let end = line;
   while (end > 0 && lines[end - 1].trim() === '') end--;
   return end;
+}
+
+/**
+ * Last line of a rule block. Comments under the rule's last step belong to it
+ * only when no blank line separates them from it; a comment after a blank line
+ * is about what follows (or about the file), so it stays in place when archive
+ * replaces or removes the rule.
+ */
+function ruleEndLine(lines: string[], line: number): number {
+  const end = lastContentLine(lines, line);
+  let content = end;
+  while (content > 0 && (lines[content - 1].trim() === '' || /^\s*#/.test(lines[content - 1]))) content--;
+  const separated = lines.slice(content, end).some((text) => text.trim() === '');
+  return separated ? content : end;
 }
 
 function toSyntaxErrors(error: unknown): GherkinSyntaxError[] {

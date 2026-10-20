@@ -178,11 +178,16 @@ export function mergeDelta(options: {
     throw new Error(`${specName}: target spec is invalid and cannot be updated until fixed (${detail}).`);
   }
 
-  const blocks: Array<{ id?: string; rule?: SpecRule; text: string }> = main.rules.map((rule) => ({
-    id: rule.id,
-    rule,
-    text: ruleSource(main, rule),
-  }));
+  // Rule blocks, with the comments that sit between rules (after a blank line)
+  // kept as blocks of their own so that replacing or removing a rule never
+  // takes them along.
+  const blocks: Array<{ id?: string; rule?: SpecRule; text: string }> = [];
+  main.rules.forEach((rule, index) => {
+    blocks.push({ id: rule.id, rule, text: ruleSource(main, rule) });
+    const gapEnd = index + 1 < main.rules.length ? main.rules[index + 1].startLine - 1 : main.lines.length;
+    const gap = trimBlankLines(main.lines.slice(rule.endLine, gapEnd));
+    if (gap.length > 0) blocks.push({ text: gap.join('\n') });
+  });
   const indexOf = (id: string): number => blocks.findIndex((block) => block.id === id);
   for (const rule of main.rules) {
     if (rule.ids.length > 1) {
@@ -244,7 +249,10 @@ export function mergeDelta(options: {
           'Use @modified to change it, or run "openspec ids assign" on a rule without an ID to get a new one.'
       );
     }
-    blocks.push({ id, text });
+    // After the last rule, ahead of any trailing comments.
+    let at = blocks.length;
+    while (at > 0 && !blocks[at - 1].rule && blocks[at - 1].id === undefined) at--;
+    blocks.splice(at === 0 ? blocks.length : at, 0, { id, text });
     counts.added++;
   }
 
@@ -316,6 +324,14 @@ function dropRemovedScenarios(lines: string[], entry: DeltaRuleEntry): string[] 
   return kept.filter((line, index) => !(line.trim() === '' && kept[index - 1]?.trim() === ''));
 }
 
+function trimBlankLines(lines: string[]): string[] {
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start].trim() === '') start++;
+  while (end > start && lines[end - 1].trim() === '') end--;
+  return lines.slice(start, end);
+}
+
 function reindent(lines: string[], shift: number): string[] {
   if (shift === 0) return lines;
   return lines.map((line) => {
@@ -354,12 +370,12 @@ function findUnaccountedLines(document: FeatureDocument): string[] {
     const lineNumber = index + 1;
     if (lineNumber < feature.line) {
       if (/^@/.test(trimmed) || /^#\s*language\s*:/.test(trimmed)) return;
-      unaccounted.push(line);
+      unaccounted.push(trimmed);
       return;
     }
     if (lineNumber === feature.line) return;
     if (!/^#/.test(trimmed) && descriptionLines.has(trimmed) && !isKeywordLine(trimmed)) return;
-    unaccounted.push(line);
+    unaccounted.push(trimmed);
   });
   return unaccounted;
 }
