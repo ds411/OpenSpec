@@ -120,6 +120,7 @@ describe('openspec trace', () => {
       expect(result.stdout).toContain('Table output');
       expect(result.stdout).toContain('REQ-0099');
       expect(result.stdout).toContain('src/list.ts:2');
+      expect(result.stdout).toContain('1 pending requirement in active changes (1 traced)');
       expect(result.stdout).toContain('Trace check failed');
     });
 

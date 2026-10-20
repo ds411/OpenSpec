@@ -59,6 +59,7 @@ function codeRootFor(root: ResolvedOpenSpecRoot): string {
 }
 
 /** Forward-slash path relative to the code root, or absolute when outside it. */
+// @trace REQ-0368
 function displayPath(codeRoot: string, file: string): string {
   if (!path.isAbsolute(file)) {
     return file;
@@ -148,13 +149,10 @@ function warningLines(codeRoot: string, warnings: TraceWarning[]): string[] {
   );
 }
 
-function pendingLines(codeRoot: string, pending: PendingRequirement[]): string[] {
-  return pending.map((entry) => {
-    const state = entry.traced ? chalk.green('traced') : chalk.dim('not traced yet');
-    return `${entry.id}  ${entry.capability} › ${entry.name}  (change ${entry.change}, ${state})  ${chalk.dim(
-      `${displayPath(codeRoot, entry.file)}:${entry.line}`
-    )}`;
-  });
+/** One line for the pending requirements; the list itself is in the JSON output. */
+function pendingSummary(pending: PendingRequirement[]): string {
+  const traced = pending.filter((entry) => entry.traced).length;
+  return `${plural(pending.length, 'pending requirement')} in active changes (${traced} traced)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +174,7 @@ export function selectedChecks(options: TraceCheckOptions): TraceCheckName[] {
   return ['untraced', 'orphans'];
 }
 
+// @trace REQ-0364
 export async function traceCheckCommand(options: TraceCheckOptions = {}): Promise<void> {
   try {
     const context = await buildTraceContext(options, CHECK_FAILURE_PAYLOAD);
@@ -247,10 +246,6 @@ function printCheck(
     );
   }
   printSection(`Warnings (${analysis.warnings.length})`, warningLines(codeRoot, analysis.warnings));
-  printSection(
-    `Pending requirements in active changes (${analysis.pending.length})`,
-    pendingLines(codeRoot, analysis.pending)
-  );
 
   const { summary } = analysis;
   const traceable = summary.traced + summary.untraced;
@@ -258,6 +253,7 @@ function printCheck(
     `${summary.traced} of ${plural(traceable, 'requirement')} traced (${percent(summary.coverage)})`,
     ...(summary.notrace > 0 ? [`${summary.notrace} @notrace`] : []),
     ...(summary.removing > 0 ? [`${summary.removing} removed by active changes`] : []),
+    ...(analysis.pending.length > 0 ? [pendingSummary(analysis.pending)] : []),
     `${plural(summary.traces, 'trace')} in ${plural(filesScanned, 'file')}`,
   ];
   console.log(details.join(', '));
@@ -292,6 +288,7 @@ export function normalizeTraceId(input: string): string | undefined {
   return /^REQ-\d+$/.test(trimmed) ? trimmed : undefined;
 }
 
+// @trace REQ-0366
 export async function traceShowCommand(idInput: string, options: TraceCommonOptions = {}): Promise<void> {
   try {
     const id = normalizeTraceId(idInput);
@@ -367,6 +364,7 @@ export async function traceShowCommand(idInput: string, options: TraceCommonOpti
 
 const REPORT_FAILURE_PAYLOAD = { summary: null, capabilities: [], pending: [], root: null };
 
+// @trace REQ-0367
 export async function traceReportCommand(options: TraceCommonOptions = {}): Promise<void> {
   try {
     const context = await buildTraceContext(options, REPORT_FAILURE_PAYLOAD);
@@ -419,7 +417,7 @@ export async function traceReportCommand(options: TraceCommonOptions = {}): Prom
     console.log(chalk.bold(row('Total', `${summary.traced}/${traceable}`, percent(summary.coverage), totalExtra)));
     if (analysis.pending.length > 0) {
       console.log();
-      printSection(`Pending requirements in active changes (${analysis.pending.length})`, pendingLines(codeRoot, analysis.pending));
+      console.log(chalk.dim(`${pendingSummary(analysis.pending)}. Run with --json for the list.`));
     }
   } catch (error) {
     emitFailure(options.json, REPORT_FAILURE_PAYLOAD, error, 'trace_report_failed');

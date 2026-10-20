@@ -1238,12 +1238,11 @@ Traces to requirements that do not exist (1)
 Warnings (1)
   src/list.ts:4  Traces REQ-0005, which change "drop-borders" removes. Remove the trace when the code goes.
 
-Pending requirements in active changes (1)
-  REQ-0042  cli-list › JSON output  (change add-json, traced)  openspec/changes/add-json/specs/cli-list/spec.feature:4
-
-1 of 2 requirements traced (50%), 1 @notrace, 1 removed by active changes, 4 traces in 1 file
+1 of 2 requirements traced (50%), 1 @notrace, 1 removed by active changes, 1 pending requirement in active changes (1 traced), 4 traces in 1 file
 ✗ Trace check failed: 1 requirement with no trace, 1 trace to requirements that do not exist.
 ```
+
+The text output counts the pending requirements; `--json` lists them.
 
 With `--json`, paths are relative to the project root with forward slashes, and lines start at 1:
 
