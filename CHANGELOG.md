@@ -1,5 +1,18 @@
 # @fission-ai/openspec
 
+## 1.14.3+fork.2
+
+Fork release on top of upstream 1.14.3. Fork versions are `<upstream version>+fork.<patch number>`.
+
+### Features
+
+- **Trace comments** — Code names the requirement it implements with a `@trace REQ-0001` comment in any comment style (`//`, `#`, `--`, `/* */`, `<!-- -->`). One comment can name more IDs, separated by commas or spaces.
+- **`openspec trace check`** — Fails when a requirement has no trace or a trace names an ID that no spec has. `--untraced` and `--orphans` run one check only. Requirements tagged `@notrace` are not checked. Requirements that an active change adds are reported as pending, and traces to requirements that an active change removes are warnings, not errors.
+- **`openspec trace show <id>`** — Lists the code that traces to a requirement.
+- **`openspec trace report`** — Gives traced and total requirements per capability.
+- **Trace scope** — The scanner reads the files git tracks plus new files that `.gitignore` allows, or walks the folder outside git. It skips `openspec/`, binary files and files over 10 MB. The optional `trace.include` and `trace.exclude` globs in `openspec/config.yaml` narrow the scope.
+- All three `trace` commands take `--json`.
+
 ## 1.14.3+fork.1
 
 Fork release on top of upstream 1.14.3. Fork versions are `<upstream version>+fork.<patch number>`.
