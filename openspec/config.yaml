@@ -34,3 +34,14 @@ rules:
     - Use existing constants and lists - don't invent detection mechanisms
     - Prefer explicit lookups over pattern matching or regex
     - If we generate it, we track it by name in a constant
+
+# `openspec trace` scope. These files show the trace syntax with example
+# IDs, so their examples must not count as traces.
+trace:
+  exclude:
+    - "docs/"
+    - "docs-lab/"
+    - ".changeset/"
+    - "CHANGELOG.md"
+    - "test/core/trace/"
+    - "test/commands/trace.test.ts"

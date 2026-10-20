@@ -16,6 +16,7 @@ Each OpenSpec project keeps its config file at `openspec/config.yaml`, in the pr
 | `operations` | map: operation → guidance list | No | Advisory guidance for apply and archive work |
 | `store` | string | No | Fallback OpenSpec root when this openspec/ is config-only |
 | `references` | list | No | Stores whose specs are indexed into instructions |
+| `trace` | map: `include` / `exclude` → glob list | No | Which files `openspec trace` scans for `@trace` comments |
 
 Invalid fields never fail a command. Each field is validated on its own, and a bad value is dropped with a warning.
 
@@ -68,6 +69,21 @@ references:
   - id: billing-specs
     remote: git@github.com:acme/billing-specs.git
 ```
+
+### trace
+
+Glob lists that set which files [`openspec trace`](../cli.md#openspec-trace) reads. Globs match paths relative to the project root. With `include`, only matching files are read. Files that match `exclude` are never read. A glob that ends in `/` means everything in that folder:
+
+```yaml
+trace:
+  include:
+    - "src/**"
+  exclude:
+    - "**/*.test.ts"
+    - "vendor/"
+```
+
+Each list is checked on its own: a bad `exclude` is dropped with a warning and a good `include` still applies. The `openspec/` folder is never scanned.
 
 ## Example
 

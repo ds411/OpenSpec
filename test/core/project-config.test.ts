@@ -232,6 +232,74 @@ githubCopilot: true
         );
       });
 
+      it('should parse trace.include and trace.exclude glob lists', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+trace:
+  include:
+    - "src/**"
+  exclude:
+    - "**/*.test.ts"
+    - "vendor/"
+`
+        );
+
+        expect(readProjectConfig(tempDir)?.trace).toEqual({
+          include: ['src/**'],
+          exclude: ['**/*.test.ts', 'vendor/'],
+        });
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should drop a bad trace list and keep the good one', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+trace:
+  include: "src/**"
+  exclude:
+    - "dist/"
+    - ""
+  scope: all
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+        expect(config?.schema).toBe('spec-driven');
+        expect(config?.trace).toEqual({ exclude: ['dist/'] });
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'trace.include' field")
+        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Some 'trace.exclude' globs are empty strings")
+        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Unknown field(s) in 'trace': scope")
+        );
+      });
+
+      it('should warn on a non-object trace field', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+trace:
+  - "src/**"
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+        expect(config?.schema).toBe('spec-driven');
+        expect(config?.trace).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid 'trace' field"));
+      });
+
       it('should ignore malformed operation entries independently', () => {
         const configDir = path.join(tempDir, 'openspec');
         fs.mkdirSync(configDir, { recursive: true });

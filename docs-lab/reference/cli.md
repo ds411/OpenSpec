@@ -26,6 +26,12 @@
 | [`openspec ids`](#openspec-ids) | Give requirements their IDs, or take free IDs from the counter. |
 | [`openspec convert-specs`](#openspec-convert-specs) | Convert markdown specs (`spec.md`) to Gherkin feature files. |
 
+**Tracing**
+
+| Command | What it does |
+|---|---|
+| [`openspec trace`](#openspec-trace) | Check that every requirement traces to code, and that every `@trace` comment names a requirement. |
+
 **Workflows and schemas**
 
 Your agent runs most of these during the workflow.
@@ -1158,6 +1164,130 @@ Next: run "openspec validate --all" and review the converted files.
 
 - `0`: done, including when there was nothing to convert.
 - `1`: a file could not be converted, or no OpenSpec root was found.
+
+## openspec trace
+
+Checks the link between requirements and code in both directions. Code points at a requirement with a `@trace` comment that names its ID:
+
+```ts
+// @trace REQ-0001
+export function listChanges() { /* ... */ }
+```
+
+```bash
+openspec trace check              # fail on requirements with no trace and on traces to unknown IDs
+openspec trace check --untraced   # only the requirements with no trace
+openspec trace check --orphans    # only the traces to IDs that do not exist
+openspec trace show REQ-0001      # every file and line that traces to REQ-0001
+openspec trace report             # traced and total requirements for each capability
+```
+
+All three subcommands take `--json`. They use the nearest `openspec/` folder, like `openspec list`, and scan the project that holds it, whichever subfolder you run them from.
+
+**Trace syntax**
+
+A trace is the word `@trace`, then one or more requirement IDs split by commas or spaces, anywhere on a line. The scanner does not parse comment syntax, so the same trace works in every language:
+
+```text
+// @trace REQ-0001                 (TypeScript, Java, Go, C#, Rust)
+# @trace REQ-0001, REQ-0002         (Python, Ruby, shell, YAML)
+-- @trace REQ-0003                  (SQL, Lua, Haskell)
+/* @trace REQ-0004 */               (CSS, C)
+<!-- @trace REQ-0005 -->            (HTML, XML, Markdown)
+```
+
+`@trace` with no ID after it, such as `@trace <ID>` in a template or prose about the feature, is not a trace. `@trace REQ-12` is a trace, and because no requirement can have that ID, the check reports it.
+
+**Files the scanner reads**
+
+- In a git work tree: the files git tracks, plus new files that `.gitignore` does not exclude.
+- Outside git: every file in the project, except the `node_modules`, `.git`, `dist` and `build` folders.
+- Always skipped: the `openspec/` folder, binary files, and files over 10 MB.
+- The optional [`trace.include` and `trace.exclude`](configuration/config-yaml.md#trace) globs in `openspec/config.yaml` narrow the set.
+
+**What counts**
+
+| Case | Result |
+|---|---|
+| A requirement in `openspec/specs/` with no trace | Untraced: `trace check` fails |
+| A trace to an ID that no main spec and no active change has | Orphan: `trace check` fails |
+| A requirement tagged `@notrace` | Not checked. Use it for a rule that no code can implement, such as a process rule |
+| A requirement that an active change adds (`@added`) | Pending: a trace to it is not an orphan, and a missing trace is not an error yet |
+| A trace to a requirement that an active change removes (`@removed`) | Warning only. The requirement is not checked for a trace |
+| A spec that does not parse, or a rule with no ID | Warning only. Run `openspec validate` and `openspec ids assign` to fix it |
+
+**Options**
+
+| Subcommand | Flag | Effect |
+|---|---|---|
+| `check` | `--untraced` | Run only the check for requirements with no trace. |
+| `check` | `--orphans` | Run only the check for traces to IDs that do not exist. |
+| all | `--json` | Print a structured result instead of text. |
+
+With no flag, or with both, `check` runs both checks.
+
+**Output**
+
+```
+Requirements with no trace (1)
+  REQ-0002  cli-list › Table output  openspec/specs/cli-list/spec.feature:13
+
+Traces to requirements that do not exist (1)
+  REQ-0099  src/list.ts:3
+
+Warnings (1)
+  src/list.ts:4  Traces REQ-0005, which change "drop-borders" removes. Remove the trace when the code goes.
+
+1 of 2 requirements traced (50%), 1 @notrace, 1 removed by active changes, 1 pending requirement in active changes (1 traced), 4 traces in 1 file
+✗ Trace check failed: 1 requirement with no trace, 1 trace to requirements that do not exist.
+```
+
+The text output counts the pending requirements; `--json` lists them.
+
+With `--json`, paths are relative to the project root with forward slashes, and lines start at 1:
+
+```json
+{
+  "valid": false,
+  "checks": ["untraced", "orphans"],
+  "summary": {
+    "requirements": 4,
+    "traced": 1,
+    "untraced": 1,
+    "notrace": 1,
+    "removing": 1,
+    "pending": 1,
+    "traces": 4,
+    "orphans": 1,
+    "warnings": 1,
+    "filesScanned": 1
+  },
+  "untraced": [
+    { "id": "REQ-0002", "name": "Table output", "capability": "cli-list", "file": "openspec/specs/cli-list/spec.feature", "line": 13 }
+  ],
+  "orphans": [
+    { "id": "REQ-0099", "file": "src/list.ts", "line": 3 }
+  ],
+  "warnings": [
+    { "code": "trace_to_removed_requirement", "id": "REQ-0005", "file": "src/list.ts", "line": 4, "change": "drop-borders", "message": "Traces REQ-0005, which change \"drop-borders\" removes. Remove the trace when the code goes." }
+  ],
+  "pending": [
+    { "id": "REQ-0042", "name": "JSON output", "capability": "cli-list", "file": "openspec/changes/add-json/specs/cli-list/spec.feature", "line": 4, "change": "add-json", "traced": true }
+  ],
+  "root": { "path": "/Users/you/projects/my-app", "source": "nearest" }
+}
+```
+
+`untraced` is present only when that check runs, and `orphans` likewise. Warning codes are `trace_to_removed_requirement`, `spec_parse_error`, `requirement_without_id` and `duplicate_requirement_id`.
+
+`trace show REQ-0001 --json` prints `{ id, requirement, traces }`. `requirement` is null for an ID that no spec has; otherwise it adds `status` (`active`, `pending` or `removing`), `notrace`, and `changes` (the active changes that add or remove it). Each trace adds the `text` of its line.
+
+`trace report --json` prints `{ summary, capabilities, pending }`. Each capability has `requirements`, `traced`, `untraced`, `notrace`, `removing`, `pending` and `coverage`. Coverage is traced divided by traced plus untraced, or null when that sum is 0.
+
+**Exit codes**
+
+- `0`: `trace check` found no problem in the checks it ran; `trace show` and `trace report` always exit 0 when they run.
+- `1`: `trace check` found a requirement with no trace or a trace to an unknown ID, `trace show` got text that is not an ID, or there is no OpenSpec root.
 
 ## openspec new
 

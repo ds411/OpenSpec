@@ -14,6 +14,7 @@ The OpenSpec CLI (`openspec`) provides terminal commands for project setup, vali
 | **Browsing** | `list`, `view`, `show` | Explore changes and specs |
 | **Validation** | `validate` | Check changes and specs for issues |
 | **Requirement IDs** | `ids assign`, `ids next`, `convert-specs` | Give requirements their IDs and convert markdown specs to Gherkin |
+| **Tracing** | `trace check`, `trace show`, `trace report` | Check that requirements and `@trace` comments in code point at each other |
 | **Lifecycle** | `archive` | Finalize completed changes |
 | **Workflow** | `new change`, `status`, `instructions`, `templates`, `schemas` | Artifact-driven workflow support |
 | **Schemas** | `schema init`, `schema fork`, `schema validate`, `schema which` | Create and manage custom workflows |
@@ -51,6 +52,9 @@ These commands support `--json` output for programmatic use by AI agents and scr
 | `openspec ids assign [target]` | Give IDs to new requirements | `--json` for the assigned IDs |
 | `openspec ids next` | Take free requirement IDs | `--count <n> --json` |
 | `openspec convert-specs` | Convert markdown specs to Gherkin | `--dry-run --json` to see the plan |
+| `openspec trace check` | Find untraced requirements and orphan traces | `--json` for CI and agents |
+| `openspec trace show <id>` | See the code that traces to a requirement | `--json` for file and line lists |
+| `openspec trace report` | See trace coverage per capability | `--json` for structured coverage |
 | `openspec status` | See artifact progress | `--json` for structured status |
 | `openspec instructions` | Get next steps | `--json` for agent instructions |
 | `openspec templates` | Find template paths | `--json` for path resolution |
@@ -721,6 +725,47 @@ Converted openspec/specs/auth/spec.md → spec.feature (1 requirement)
 Converted openspec/changes/add-2fa/specs/auth/spec.md → spec.feature (2 requirements)
 Converted 2 files and gave 2 IDs.
 Next: run "openspec validate --all" and review the converted files.
+```
+
+---
+
+## Tracing Commands
+
+Code points back at a requirement with a `@trace` comment that names the requirement ID, in any comment style: `// @trace REQ-0001`, `# @trace REQ-0001, REQ-0002`, `<!-- @trace REQ-0003 -->`. The trace commands check the link in both directions.
+
+```
+openspec trace check [--untraced] [--orphans] [--json]
+openspec trace show <requirement-id> [--json]
+openspec trace report [--json]
+```
+
+| Command | What it does | Exit code |
+|---------|--------------|-----------|
+| `openspec trace check` | Finds requirements with no trace, and traces to IDs that do not exist | 1 if it finds a problem |
+| `openspec trace check --untraced` | Only the requirements with no trace | 1 if it finds a problem |
+| `openspec trace check --orphans` | Only the traces to IDs that do not exist | 1 if it finds a problem |
+| `openspec trace show REQ-0001` | Lists each file and line that traces to the requirement | 0 |
+| `openspec trace report` | Shows traced and total requirements for each capability | 0 |
+
+The scanner reads the files that git tracks, plus new files that `.gitignore` does not exclude (outside git: every file except `node_modules`, `.git`, `dist` and `build`). It skips `openspec/`, binary files and files over 10 MB. The `trace.include` and `trace.exclude` globs in `openspec/config.yaml` narrow the scope (see [Customization](customization.md#trace-scope)).
+
+Special cases:
+
+- A requirement tagged `@notrace` is not in the untraced check. Use it for a requirement that no code can implement, for example a process rule.
+- A requirement that an active change adds is pending: a trace to it is not an orphan, and a missing trace is not an error yet.
+- A trace to a requirement that an active change removes gives a warning, not an error.
+
+**Examples:**
+
+```bash
+# Fail the build when a requirement has no code, or code names a missing requirement
+openspec trace check
+
+# JSON for CI and agents
+openspec trace check --json
+
+# Where is REQ-0001 implemented?
+openspec trace show REQ-0001
 ```
 
 ---

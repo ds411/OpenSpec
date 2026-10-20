@@ -19,6 +19,7 @@ The `openspec/config.yaml` file is the easiest way to customize OpenSpec for you
 - **Add per-artifact rules** - Custom rules for specific artifacts
 - **Add per-operation guidance** - Advisory preferences for apply and archive work
 - **Remember integration choices** - e.g. the [GitHub Copilot cloud coding agent](supported-tools.md#github-copilot-cloud-coding-agent) opt-in
+- **Set the trace scope** - Choose which files `openspec trace` scans for `@trace` comments
 
 ### Quick Setup
 
@@ -58,7 +59,23 @@ operations:
 # cloud coding agent; controls whether `init`/`update` generate its files.
 githubCopilot:
   cloudAgent: false
+
+# Which files `openspec trace` scans for `@trace` comments.
+trace:
+  include:
+    - "src/**"
+  exclude:
+    - "**/*.test.ts"
 ```
+
+### Trace Scope
+
+`openspec trace` reads the files that git tracks, plus new files that `.gitignore` does not exclude. The optional `trace` block narrows that set. Globs match paths relative to the project root:
+
+- `include`: when set, only matching files are scanned.
+- `exclude`: matching files are never scanned. A glob that ends in `/` means the whole folder, for example `vendor/`.
+
+The `openspec/` folder is never scanned. See [CLI: Tracing Commands](cli.md#tracing-commands).
 
 ### How It Works
 
