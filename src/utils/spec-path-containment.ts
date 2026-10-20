@@ -51,7 +51,7 @@ function isLexicallyWithin(allowedDirectory: string, targetPath: string): boolea
 /**
  * A project may keep a capability's spec file elsewhere - beside the product
  * documentation it belongs to - and leave a relative symlink at
- * `openspec/specs/<capability>/spec.md`, so OpenSpec and the docs read and
+ * `openspec/specs/<capability>/spec.feature`, so OpenSpec and the docs read and
  * write the same bytes. Accept such a link, and refuse one that leaves the
  * project, so a link swapped underneath a repo cannot turn a spec read or an
  * archive write into an arbitrary file access.
@@ -89,7 +89,7 @@ function assertLinkedSpecFileInProject(
 }
 
 /**
- * Containment for a `spec.md` under a trust root already established for it:
+ * Containment for a `spec.feature` under a trust root already established for it:
  * inside the root, or a link out of the root that stays inside the project.
  *
  * Deliberately does not re-derive a trust root from the file's own capability
@@ -106,7 +106,7 @@ export function assertSpecFileWithin(root: string, specFile: string): void {
 }
 
 /**
- * Containment for a `spec.md` as it is discovered, where the capability
+ * Containment for a `spec.feature` as it is discovered, where the capability
  * directory itself may deliberately be a link into another repository and is
  * then the file's own trust root.
  */

@@ -494,8 +494,8 @@ const DEFAULT_ARTIFACTS: Array<{
   {
     id: 'specs',
     description: 'Detailed specifications with requirements and scenarios',
-    generates: 'specs/**/*.md',
-    template: 'specs/spec.md',
+    generates: 'specs/**/*.feature',
+    template: 'specs/spec.feature',
   },
   {
     id: 'design',

@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { getTaskProgressForChange, formatTaskStatus } from '../utils/task-progress.js';
 import { readFileSync, type Dirent } from 'fs';
-import { MarkdownParser } from './parsers/markdown-parser.js';
+import { parseSpecContent } from './gherkin/spec-model.js';
 import type { RootOutput } from './root-selection.js';
 import { discoverSpecFiles } from '../utils/spec-discovery.js';
 import {
@@ -275,8 +275,7 @@ export class ListCommand {
     for (const { id, specFile } of discovered) {
       try {
         const content = readFileSync(specFile, 'utf-8');
-        const parser = new MarkdownParser(content);
-        const spec = parser.parseSpec(id);
+        const spec = parseSpecContent(content, id);
         specs.push({ id, requirementCount: spec.requirements.length });
       } catch {
         // If spec cannot be read or parsed, include with 0 count

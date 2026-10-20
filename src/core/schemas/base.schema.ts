@@ -9,8 +9,11 @@ export const ScenarioSchema = z.object({
 });
 
 export const RequirementSchema = z.object({
-  // Header text without `###` and the `Requirement:` prefix: the name archive
-  // matches MODIFIED, REMOVED and RENAMED entries against.
+  // The stable requirement ID from the rule's tag (`@REQ-0001` → `REQ-0001`):
+  // what archive matches MODIFIED and REMOVED entries against, and what code
+  // traces cite.
+  id: z.string().optional(),
+  // The rule's name, without the `Rule:` keyword.
   name: z.string().optional(),
   // SHALL/MUST body-keyword enforcement lives in the imperative validator
   // (Validator.applySpecRules), not here: the parser collapses the requirement

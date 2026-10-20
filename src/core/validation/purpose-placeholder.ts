@@ -1,11 +1,12 @@
 import { buildCodeFenceMask } from '../parsers/code-fence.js';
 import { PURPOSE_PLACEHOLDER_PREFIX, PURPOSE_PLACEHOLDER_SUFFIX } from './constants.js';
+import type { FeatureDocument } from '../gherkin/document.js';
 
 /**
- * Detects a `## Purpose` that is still a placeholder, rather than one somebody
+ * Detects a Purpose (feature description) that is still a placeholder, rather than one somebody
  * wrote.
  *
- * When a delta introduces a capability with no usable `## Purpose`, archive
+ * When a delta introduces a capability with no feature description, archive
  * stamps the placeholder into the new main spec. That text is over
  * `MIN_PURPOSE_LENGTH`, so the brevity check cannot reach it: the one rule that
  * exists to catch a Purpose nobody wrote is satisfied by the exact string
@@ -69,9 +70,6 @@ const LEADING_MARKER_PUNCTUATED = new RegExp(
   'iu'
 );
 
-const PURPOSE_HEADER = /^ {0,3}##(?!#)[ \t]+Purpose[ \t]*$/i;
-const TOP_LEVEL_HEADER = /^ {0,3}#{1,2}(?!#)[ \t]+/;
-
 /**
  * The lines of `text` that sit outside a fenced code block, with line endings
  * normalised first.
@@ -116,7 +114,7 @@ function generatedPlaceholderPrefixIndex(text: string): number | undefined {
  */
 export function findPurposePlaceholderIssue(
   overview: string,
-  content?: string
+  document?: FeatureDocument
 ): PurposePlaceholderIssue | null {
   // An empty Purpose needs no branch of its own: neither rule matches empty
   // text, so it falls through to null on the line below. An early return for it
@@ -130,49 +128,35 @@ export function findPurposePlaceholderIssue(
   // Which rule matched decides where the placeholder is, so the locator is told.
   // When both match the leading marker wins: it sits at or above the generated
   // sentence, and the earliest marker is the one a reader scanning down meets.
-  return { line: content === undefined ? undefined : findPlaceholderLine(content, leading) };
+  return { line: document === undefined ? undefined : findPlaceholderLine(document, leading) };
 }
 
 /**
- * The line inside the `## Purpose` section carrying the placeholder, so the
- * warning points at the text to replace rather than at the file.
+ * The line of the feature description carrying the placeholder, so the warning
+ * points at the text to replace rather than at the file.
  *
- * Which line that is depends on the rule that matched. A leading marker is the
- * section's first non-blank line by definition. The generated sentence is not:
- * it can follow prose somebody wrote, and naming the first non-blank line then
- * points at that prose - a line the reader can see is fine, which reads as the
- * check being wrong rather than the Purpose being unwritten.
+ * A leading marker is the description's first non-blank line by definition.
+ * The generated sentence is not: it can follow prose somebody wrote, and
+ * naming the first line then points at prose the reader can see is fine.
  *
- * Fenced lines are skipped on the way, for the reason detection skips them, and
- * so a `## Requirements` quoted inside a fence cannot end the section early.
- *
- * Undefined when the placeholder cannot be located - no section header, or a
- * generated sentence no single line carries. The caller then reports the finding
- * without a line rather than with a guessed one, since a wrong line number is
- * worse than none.
- *
- * Line endings are normalised first, so the same spec reports the same line
- * whether it was saved on Windows or on macOS/Linux.
+ * The description runs from the line after `Feature:` to the first line that
+ * starts a tag, a comment, a background, a scenario or a rule. Undefined when
+ * the placeholder cannot be located; a wrong line number is worse than none.
  */
-function findPlaceholderLine(content: string, leading: boolean): number | undefined {
-  const lines = content.replace(/\r\n?/g, '\n').split('\n');
-  const fenced = buildCodeFenceMask(lines);
-  const headerIndex = lines.findIndex((line, index) => !fenced[index] && PURPOSE_HEADER.test(line));
-  if (headerIndex === -1) return undefined;
-
-  const purposeLines: Array<{ line: number; text: string }> = [];
-  for (let i = headerIndex + 1; i < lines.length; i++) {
-    if (fenced[i]) continue;
-    if (TOP_LEVEL_HEADER.test(lines[i])) break;
-    if (leading && lines[i].trim()) return i + 1;
-    purposeLines.push({ line: i + 1, text: lines[i] });
+function findPlaceholderLine(document: FeatureDocument, leading: boolean): number | undefined {
+  const feature = document.feature;
+  if (!feature) return undefined;
+  const descriptionLines: Array<{ line: number; text: string }> = [];
+  for (let i = feature.line; i < document.lines.length; i++) {
+    const text = document.lines[i];
+    if (/^\s*(@|#|Background:|Scenario|Example|Rule:)/.test(text)) break;
+    if (leading && text.trim()) return i + 1;
+    descriptionLines.push({ line: i + 1, text: text.trim() });
   }
-
   if (leading) return undefined;
-
-  const purpose = purposeLines.map(({ text }) => text).join('\n');
+  const purpose = descriptionLines.map(({ text }) => text).join('\n');
   const prefixAt = generatedPlaceholderPrefixIndex(purpose);
   if (prefixAt === undefined) return undefined;
   const lineOffset = purpose.slice(0, prefixAt).split('\n').length - 1;
-  return purposeLines[lineOffset]?.line;
+  return descriptionLines[lineOffset]?.line;
 }

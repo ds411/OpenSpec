@@ -22,6 +22,7 @@ import { getStoreRootForBackend } from './store/registry.js';
 import { inspectRegisteredStore, type ResolvedOpenSpecRoot } from './root-selection.js';
 import { getSpecIds } from '../utils/item-discovery.js';
 import { FileSystemUtils } from '../utils/file-system.js';
+import { parseFeature } from './gherkin/document.js';
 import { MAX_CONTEXT_SIZE, type DeclarationEntry } from './project-config.js';
 
 export interface ReferenceSpecEntry {
@@ -76,95 +77,14 @@ function registerFix(id: string, remote?: string): string {
   return `Get a checkout from a teammate and run: openspec store register <path> --id ${id}`;
 }
 
-const WHITESPACE = /\s/;
-
 /**
- * Drop a CommonMark closing sequence (`## Purpose ##`). The closing run only
- * counts when whitespace precedes it, so `Purpose###` keeps its hashes.
- * Scans from the end so the cost stays linear in the title length.
+ * Tolerant first-Purpose-line extraction: the first line of the feature
+ * description. The index must never fail on an imperfect upstream spec, so a
+ * file that does not parse gives an empty summary instead of an error.
  */
-function stripClosingSequence(title: string): string {
-  let end = title.length;
-  while (end > 0 && WHITESPACE.test(title[end - 1])) {
-    end--;
-  }
-
-  const hashEnd = end;
-  while (end > 0 && title[end - 1] === '#') {
-    end--;
-  }
-
-  const noClosingRun = end === hashEnd;
-  const missingLeadingSpace = end === 0 || !WHITESPACE.test(title[end - 1]);
-  if (noClosingRun || missingLeadingSpace) {
-    return title.trim();
-  }
-
-  return title.slice(0, end).trim();
-}
-
-/**
- * Heading title, or null when the line is not an ATX heading. Hand-rolled
- * rather than a regex so a title padded with whitespace cannot backtrack.
- */
-function parseHeadingTitle(line: string): string | null {
-  let level = 0;
-  while (level < 6 && level < line.length && line[level] === '#') {
-    level++;
-  }
-  if (level === 0 || level >= line.length || !WHITESPACE.test(line[level])) {
-    return null;
-  }
-
-  let start = level;
-  while (start < line.length && WHITESPACE.test(line[start])) {
-    start++;
-  }
-
-  return stripClosingSequence(line.slice(start));
-}
-
-/**
- * Tolerant first-Purpose-line extraction. parseSpec() throws on specs
- * without Purpose/Requirements sections; the index must never fail on an
- * imperfect upstream spec, so this scans for the heading directly —
- * fence-aware, so `## Purpose` inside a code block never matches, and
- * tolerant of CommonMark closing hashes (`## Purpose ##`).
- */
-export function extractFirstPurposeLine(markdown: string): string {
-  const lines = markdown.split(/\r?\n/);
-  let inPurpose = false;
-  let fenceMarker: string | null = null;
-
-  for (const line of lines) {
-    // CommonMark: a fence closes only with its own marker kind.
-    const fence = line.match(/^\s*(```|~~~)/);
-    if (fence) {
-      if (fenceMarker === null) {
-        fenceMarker = fence[1];
-      } else if (fence[1] === fenceMarker) {
-        fenceMarker = null;
-      }
-      continue;
-    }
-    if (fenceMarker !== null) {
-      continue;
-    }
-
-    const title = parseHeadingTitle(line);
-    if (title !== null) {
-      if (inPurpose) {
-        return '';
-      }
-      inPurpose = title.toLowerCase() === 'purpose';
-      continue;
-    }
-    if (inPurpose && line.trim().length > 0) {
-      return line.trim();
-    }
-  }
-
-  return '';
+export function extractFirstPurposeLine(content: string): string {
+  const description = parseFeature(content).feature?.description ?? '';
+  return description.split('\n').find((line) => line.trim().length > 0)?.trim() ?? '';
 }
 
 async function collectSpecEntries(referencedRoot: string): Promise<ReferenceSpecEntry[]> {
@@ -175,7 +95,7 @@ async function collectSpecEntries(referencedRoot: string): Promise<ReferenceSpec
       let summary = '';
       try {
         const content = await fs.readFile(
-          path.join(referencedRoot, 'openspec', 'specs', specId, 'spec.md'),
+          path.join(referencedRoot, 'openspec', 'specs', specId, 'spec.feature'),
           'utf-8'
         );
         summary = sanitizeInline(extractFirstPurposeLine(content));

@@ -482,7 +482,7 @@ function collectMissingPrerequisites(input: {
  * creation, so this never fires on them.
  *
  * A delta file the merge path never reads (specs/<capability>.md, a note
- * beside spec.md) still satisfies the specs glob, so it reads as written here
+ * beside spec.feature) still satisfies the specs glob, so it reads as written here
  * while validate rejects it and archive would drop it. Each one is named.
  */
 async function collectApplyWarnings(input: {
@@ -502,7 +502,7 @@ async function collectApplyWarnings(input: {
   if (specArtifacts.some((artifact) => skippedArtifacts?.has(artifact.id))) return [];
   const warnings = (await findUnreadDeltaFiles(path.join(changeDir, 'specs'))).map(
     (file) =>
-      `specs/${file.path} is not a capability's spec.md, so \`openspec validate ${changeName}\` rejects it and archive never merges it. ` +
+      `specs/${file.path} is not a capability's spec.feature, so \`openspec validate ${changeName}\` rejects it and archive never merges it. ` +
       `Move its requirements into specs/${file.expected}.`
   );
   const hasDeltas = specArtifacts.some(

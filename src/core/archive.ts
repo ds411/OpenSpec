@@ -1492,15 +1492,15 @@ export class ArchiveCommand {
 
       // Validate delta-formatted spec files under the change directory if present
       const changeSpecsDir = path.join(changeDir, 'specs');
-      // A spec.md at the specs/ root is never merged, so archiving a change
+      // A spec.feature at the specs/ root is never merged, so archiving a change
       // that has one drops its content whether or not it carries delta headers
       // (#1385). Its existence alone must run validation, which reports it and
-      // blocks the archive. A directory named spec.md is a normal capability
+      // blocks the archive. A directory named spec.feature is a normal capability
       // folder, so only a regular file counts.
-      const rootSpecStat = await fs.stat(path.join(changeSpecsDir, 'spec.md')).catch(() => null);
+      const rootSpecStat = await fs.stat(path.join(changeSpecsDir, 'spec.feature')).catch(() => null);
       let hasDeltaSpecs = rootSpecStat?.isFile() === true;
       // Likewise for delta sections in any other file the merge path does not
-      // read (specs/<capability>.md, a note beside spec.md): without this the
+      // read (specs/<capability>.md, a note beside spec.feature): without this the
       // zero-delta leniency below archives the change as done with nothing
       // merged, although validate rejects it.
       if (!hasDeltaSpecs) {
