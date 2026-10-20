@@ -12,39 +12,43 @@ import { runCLI, type RunCLIResult } from '../helpers/run-cli.js';
 import { cleanupTempPath } from '../helpers/temp-cleanup.js';
 import { writeSpec } from '../helpers/openspec-fixtures.js';
 
-const VALID_DELTA_SPEC = `## ADDED Requirements
+const VALID_DELTA_SPEC = `Feature: Billing
 
-### Requirement: Billing SHALL work
-The system SHALL create bills.
+  @added @REQ-0001
+  Rule: Billing SHALL work
+    The system SHALL create bills.
 
-#### Scenario: Creates bills
-- **WHEN** a billing period ends
-- **THEN** a bill is created
+    Scenario: Creates bills
+      When a billing period ends
+      Then a bill is created
 `;
 
-const INVALID_DELTA_SPEC = `## ADDED Requirements
+const INVALID_DELTA_SPEC = `Feature: Billing
 
-### Requirement: Billing SHALL work
-The system SHALL create bills.
+  @added @REQ-0001
+  Rule: Billing SHALL work
+    The system SHALL create bills.
 `;
 
-// Targets a spec that does not exist yet: REMOVED deltas are ignored with a
+// Targets a spec that does not exist yet: @removed rules are ignored with a
 // human-mode warning, which must never leak into JSON stdout.
-const REMOVED_ONLY_DELTA_SPEC = `## REMOVED Requirements
+const REMOVED_ONLY_DELTA_SPEC = `Feature: Billing
 
-### Requirement: Old billing SHALL go away
+  @removed @REQ-0002
+  Rule: Old billing SHALL go away
 `;
 
-// MODIFIED deltas against a spec that does not exist make buildUpdatedSpec
+// @modified rules against a spec that does not exist make buildUpdatedSpec
 // throw during the prepare pass.
-const MODIFIED_ONLY_DELTA_SPEC = `## MODIFIED Requirements
+const MODIFIED_ONLY_DELTA_SPEC = `Feature: Billing
 
-### Requirement: Billing SHALL work
-The system SHALL create bills differently.
+  @modified @REQ-0001
+  Rule: Billing SHALL work
+    The system SHALL create bills differently.
 
-#### Scenario: Creates bills
-- **WHEN** a billing period ends
-- **THEN** a bill is created
+    Scenario: Creates bills
+      When a billing period ends
+      Then a bill is created
 `;
 
 describe('store root selection for normal commands', () => {
@@ -105,7 +109,7 @@ describe('store root selection for normal commands', () => {
     if (options.deltaSpec !== null) {
       const specDir = path.join(changeDir, 'specs', 'billing');
       fs.mkdirSync(specDir, { recursive: true });
-      fs.writeFileSync(path.join(specDir, 'spec.md'), options.deltaSpec ?? VALID_DELTA_SPEC);
+      fs.writeFileSync(path.join(specDir, 'spec.feature'), options.deltaSpec ?? VALID_DELTA_SPEC);
     }
     return changeDir;
   }
@@ -140,7 +144,7 @@ describe('store root selection for normal commands', () => {
         fs.writeFileSync(path.join(configDir, 'config.json'), JSON.stringify({ defaultStore: 'team-context' }));
       }
 
-      const spec = '# Billing\n\n## Purpose\nBills from the selected root.\n\n## Requirements\n\n### Requirement: Billing\nThe system SHALL bill.\n\n#### Scenario: Bills\n- **WHEN** due\n- **THEN** billed\n';
+      const spec = 'Feature: Billing\n  Bills from the selected root.\n\n  @REQ-0001\n  Rule: Billing\n    The system SHALL bill.\n\n    Scenario: Bills\n      When due\n      Then billed\n';
       writeSpec(selectedRoot, 'billing', spec);
       writeSpec(selectedRoot, 'billing/invoices', spec);
       createChange(selectedRoot, 'billing');
@@ -419,7 +423,7 @@ operations:
         fs.existsSync(path.join(storeRoot, 'openspec', 'changes', 'store-change'))
       ).toBe(false);
       expect(
-        fs.existsSync(path.join(storeRoot, 'openspec', 'specs', 'billing', 'spec.md'))
+        fs.existsSync(path.join(storeRoot, 'openspec', 'specs', 'billing', 'spec.feature'))
       ).toBe(true);
       expectNoLocalOpenSpec();
     });
@@ -444,16 +448,16 @@ operations:
       // the diff below would be computed from this decoy.
       fs.mkdirSync(path.join(appRepo, 'openspec', 'specs', 'billing'), { recursive: true });
       fs.writeFileSync(
-        path.join(appRepo, 'openspec', 'specs', 'billing', 'spec.md'),
-        '# billing Specification\n\n## Purpose\nDecoy.\n\n## Requirements\n### Requirement: Billing SHALL work\nThe system SHALL create decoy bills.\n\n#### Scenario: Creates bills\n- **WHEN** a billing period ends\n- **THEN** a decoy bill is created\n'
+        path.join(appRepo, 'openspec', 'specs', 'billing', 'spec.feature'),
+        'Feature: Billing\n  Decoy.\n\n  @REQ-0001\n  Rule: Billing SHALL work\n    The system SHALL create decoy bills.\n\n    Scenario: Creates bills\n      When a billing period ends\n      Then a decoy bill is created\n'
       );
       fs.mkdirSync(path.join(storeRoot, 'openspec', 'specs', 'billing'), { recursive: true });
       fs.writeFileSync(
-        path.join(storeRoot, 'openspec', 'specs', 'billing', 'spec.md'),
-        '# billing Specification\n\n## Purpose\nBilling.\n\n## Requirements\n### Requirement: Billing SHALL work\nThe system SHALL create bills.\n\n#### Scenario: Creates bills\n- **WHEN** a billing period ends\n- **THEN** a bill is created\n'
+        path.join(storeRoot, 'openspec', 'specs', 'billing', 'spec.feature'),
+        'Feature: Billing\n  Billing.\n\n  @REQ-0001\n  Rule: Billing SHALL work\n    The system SHALL create bills.\n\n    Scenario: Creates bills\n      When a billing period ends\n      Then a bill is created\n'
       );
       createChange(storeRoot, 'store-change', {
-        deltaSpec: '## MODIFIED Requirements\n\n### Requirement: Billing SHALL work\nThe system SHALL create bills monthly.\n\n#### Scenario: Creates bills\n- **WHEN** a billing period ends\n- **THEN** a bill is created\n',
+        deltaSpec: 'Feature: Billing\n\n  @modified @REQ-0001\n  Rule: Billing SHALL work\n    The system SHALL create bills monthly.\n\n    Scenario: Creates bills\n      When a billing period ends\n      Then a bill is created\n',
       });
 
       const result = await runCLI(
@@ -461,9 +465,9 @@ operations:
         { cwd: appRepo, env }
       );
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('MODIFIED: Billing SHALL work');
-      expect(result.stdout).toContain('-The system SHALL create bills.');
-      expect(result.stdout).toContain('+The system SHALL create bills monthly.');
+      expect(result.stdout).toContain('MODIFIED: REQ-0001 Billing SHALL work');
+      expect(result.stdout).toContain('-    The system SHALL create bills.');
+      expect(result.stdout).toContain('+    The system SHALL create bills monthly.');
       expect(result.stdout).not.toContain('decoy');
     });
 
@@ -955,13 +959,13 @@ operations:
       for (const capability of ['aaa-good', 'zzz-bad']) {
         const specDir = path.join(changeDir, 'specs', capability);
         fs.mkdirSync(specDir, { recursive: true });
-        fs.writeFileSync(path.join(specDir, 'spec.md'), VALID_DELTA_SPEC);
+        fs.writeFileSync(path.join(specDir, 'spec.feature'), VALID_DELTA_SPEC);
       }
       const badTargetDir = path.join(storeRoot, 'openspec', 'specs', 'zzz-bad');
       fs.mkdirSync(badTargetDir, { recursive: true });
       const badTargetContent =
-        '# zzz-bad\n\n## Purpose\nLegacy.\n\n## Requirements\n\n### Requirement: Old rule SHALL hold\nThe system SHALL hold.\n';
-      fs.writeFileSync(path.join(badTargetDir, 'spec.md'), badTargetContent);
+        'Feature: zzz-bad\n  Legacy.\n\n  @REQ-0009\n  Rule: Old rule SHALL hold\n    The system SHALL hold.\n';
+      fs.writeFileSync(path.join(badTargetDir, 'spec.feature'), badTargetContent);
 
       const result = await runCLI(
         ['archive', 'two-spec-change', '--store', 'team-context', '--json', '--yes'],
@@ -975,9 +979,9 @@ operations:
       // "No files were changed" must be true: the good spec was not created
       // and the bad target is byte-identical.
       expect(
-        fs.existsSync(path.join(storeRoot, 'openspec', 'specs', 'aaa-good', 'spec.md'))
+        fs.existsSync(path.join(storeRoot, 'openspec', 'specs', 'aaa-good', 'spec.feature'))
       ).toBe(false);
-      expect(fs.readFileSync(path.join(badTargetDir, 'spec.md'), 'utf-8')).toBe(
+      expect(fs.readFileSync(path.join(badTargetDir, 'spec.feature'), 'utf-8')).toBe(
         badTargetContent
       );
       expect(
