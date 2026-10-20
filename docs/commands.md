@@ -64,7 +64,7 @@ You: /opsx:propose add-dark-mode
 
 AI:  Created openspec/changes/add-dark-mode/
      ✓ proposal.md
-     ✓ specs/ui/spec.md
+     ✓ specs/ui/spec.feature
      ✓ design.md
      ✓ tasks.md
      Ready for implementation. Run /opsx:apply.
@@ -223,7 +223,7 @@ AI:  Change: add-dark-mode
 
      [Reads proposal.md, creates specs based on requirements]
 
-     ✓ Created openspec/changes/add-dark-mode/specs/ui/spec.md
+     ✓ Created openspec/changes/add-dark-mode/specs/ui/spec.feature
 
      Now available: design
      Run /opsx:continue to create the next artifact.
@@ -264,7 +264,7 @@ You: /opsx:ff add-dark-mode
 AI:  Fast-forwarding add-dark-mode...
 
      ✓ Creating proposal.md
-     ✓ Creating specs/ui/spec.md
+     ✓ Creating specs/ui/spec.feature
      ✓ Creating design.md
      ✓ Creating tasks.md
 
@@ -469,7 +469,7 @@ AI:  Verifying add-dark-mode...
 
 **What it does:**
 - Reads delta specs from change folder
-- Parses ADDED/MODIFIED/REMOVED/RENAMED sections
+- Reads the `@added`/`@modified`/`@removed` rules and matches them to main-spec requirements by ID
 - Merges changes into main `openspec/specs/` directory
 - Preserves existing content not mentioned in delta
 - Does not archive the change (remains active)
@@ -480,15 +480,15 @@ You: /opsx:sync
 
 AI:  Syncing add-dark-mode delta specs...
 
-     Reading: openspec/changes/add-dark-mode/specs/ui/spec.md
-     Target:  openspec/specs/ui/spec.md
+     Reading: openspec/changes/add-dark-mode/specs/ui/spec.feature
+     Target:  openspec/specs/ui/spec.feature
 
      Changes to apply:
-     ✓ ADDED: Theme Selection requirement (2 scenarios)
-     ✓ ADDED: Accessibility requirement (1 scenario)
+     ✓ @added REQ-0012: Theme Selection (2 scenarios)
+     ✓ @added REQ-0013: Accessibility (1 scenario)
 
      Merging...
-     ✓ openspec/specs/ui/spec.md updated
+     ✓ openspec/specs/ui/spec.feature updated
 
      Change remains active. Run /opsx:archive when ready to complete.
 ```
@@ -548,7 +548,7 @@ AI:  Archiving add-dark-mode...
 
 You: Yes
 
-AI:  ✓ Synced specs to openspec/specs/ui/spec.md
+AI:  ✓ Synced specs to openspec/specs/ui/spec.feature
      ✓ Moved to openspec/changes/archive/2025-01-24-add-dark-mode/
 
      Change archived successfully.

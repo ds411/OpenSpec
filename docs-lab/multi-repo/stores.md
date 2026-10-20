@@ -43,7 +43,7 @@ Two common reasons to use a store:
 
   ```
           product-specs  (store)
-          └── openspec/specs/checkout/spec.md    the expected behavior
+          └── openspec/specs/checkout/spec.feature    the expected behavior
                     ▲
       ┌─────────────┼─────────────┐
       │             │             │

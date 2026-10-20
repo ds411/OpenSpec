@@ -221,7 +221,7 @@ If the change was already implemented, it recommends `/opsx:apply` so the code c
 ```text
 /opsx:sync
 ```
-Merges the current change's delta specs into your main `openspec/specs/` without archiving — the change stays active. It applies the whole delta: a requirement under `## REMOVED` is deleted from the main spec and a renamed one is retitled in place, while content the delta doesn't mention is left untouched. Syncing is optional — archive prompts you to sync first if you haven't. Reach for it when you want main specs updated before archiving, when a parallel change needs to build on specs this one just added, or when you want to review the merged main spec before archiving.
+Merges the current change's delta specs into your main `openspec/specs/` without archiving — the change stays active. It applies the whole delta: a `@removed` rule is deleted from the main spec and a `@modified` rule with a new name is retitled in place, while content the delta doesn't mention is left untouched. Syncing is optional — archive prompts you to sync first if you haven't. Reach for it when you want main specs updated before archiving, when a parallel change needs to build on specs this one just added, or when you want to review the merged main spec before archiving.
 
 ### Finish up
 ```
@@ -523,7 +523,7 @@ Artifacts form a directed acyclic graph (DAG). Dependencies are **enablers**, no
   │  │  $ openspec instructions specs --change "add-auth" --json          │  │
   │  │                                                                    │  │
   │  │  {                                                                 │  │
-  │  │    "template": "# Specification\n\n## ADDED Requirements...",      │  │
+  │  │    "template": "Feature: <!-- capability name -->\n...",           │  │
   │  │    "dependencies": [{"id": "proposal", "path": "...", "done": true}│  │
   │  │    "unlocks": ["tasks"]                                            │  │
   │  │  }                                                                 │  │

@@ -74,18 +74,19 @@ AI:  Archived to openspec/changes/archive/2025-01-23-add-dark-mode/
 <details>
 <summary><strong>What do the specs actually look like?</strong></summary>
 
-Plain Markdown — requirements with concrete scenarios, no special syntax to learn. Here's what goes in the `specs/` folder created above:
+Gherkin feature files — requirements as `Rule:` blocks with concrete scenarios, each with a stable ID you can point at from code and tests. Here's what goes in the `specs/` folder created above:
 
-```markdown
-## ADDED Requirements
+```gherkin
+Feature: UI
 
-### Requirement: Theme selection
-The app SHALL let users switch between light and dark themes,
-defaulting to the system preference.
+  @added @REQ-0012
+  Rule: Theme selection
+    The app SHALL let users switch between light and dark themes,
+    defaulting to the system preference.
 
-#### Scenario: User toggles dark mode
-- **WHEN** the user clicks the theme toggle
-- **THEN** the app switches to dark mode and persists the choice
+    Scenario: User toggles dark mode
+      When the user clicks the theme toggle
+      Then the app switches to dark mode and persists the choice
 ```
 
 Your AI writes these; you review the plan before any code is written.

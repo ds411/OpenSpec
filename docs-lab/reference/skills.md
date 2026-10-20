@@ -111,8 +111,8 @@ Merge a change proposal's spec updates into `specs/` without archiving it.
 | Contract | Description |
 |---|---|
 | **Arguments** | A change proposal name, optional. You can also name a subset of its delta specs, and only those sync. |
-| **Creates** | Edits or creates `openspec/specs/<capability-path>/spec.md` for each delta spec, merging added, modified, removed, and renamed requirements into the main spec. Never code. |
-| **Response** | A per-capability summary of requirements added, modified, removed, or renamed, after the updated specs validate. The change proposal stays active; archiving waits for `openspec-archive-change`. |
+| **Creates** | Edits or creates `openspec/specs/<capability-path>/spec.feature` for each delta spec, merging `@added`, `@modified`, and `@removed` requirements into the main spec by ID (a `@modified` rule with a new name renames the requirement). Never code. |
+| **Response** | A per-capability summary of requirements added, modified, removed, or renamed, each named with its ID, after the updated specs validate. The change proposal stays active; archiving waits for `openspec-archive-change`. |
 
 ## openspec-archive-change
 

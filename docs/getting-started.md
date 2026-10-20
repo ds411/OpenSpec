@@ -57,7 +57,7 @@ After running `openspec init`, your project has this structure:
 openspec/
 ├── specs/              # Source of truth (your system's behavior)
 │   └── <domain>/
-│       └── spec.md
+│       └── spec.feature
 ├── changes/            # Proposed updates (one folder per change)
 │   └── <change-name>/
 │       ├── proposal.md
@@ -65,13 +65,14 @@ openspec/
 │       ├── tasks.md
 │       └── specs/      # Delta specs (what's changing)
 │           └── <domain>/
-│               └── spec.md
+│               └── spec.feature
+├── requirement-ids.yaml # Requirement ID counter (created when the first ID is given)
 └── config.yaml         # Project configuration (optional)
 ```
 
 **Two key directories:**
 
-- **`specs/`** - The source of truth. These specs describe how your system currently behaves. Organized by domain (e.g., `specs/auth/`, `specs/payments/`).
+- **`specs/`** - The source of truth. These specs describe how your system currently behaves, as Gherkin feature files. Organized by domain (e.g., `specs/auth/`, `specs/payments/`). Each requirement is a `Rule:` with a stable ID such as `@REQ-0001`.
 
 - **`changes/`** - Proposed modifications. Each change gets its own folder with all related artifacts. When a change is complete, its specs merge into the main `specs/` directory.
 
@@ -82,7 +83,7 @@ Each change folder contains artifacts that guide the work:
 | Artifact | Purpose |
 |----------|---------|
 | `proposal.md` | The "why" and "what" - captures intent, scope, and approach |
-| `specs/` | Delta specs showing ADDED/MODIFIED/REMOVED requirements |
+| `specs/` | Delta specs showing `@added`/`@modified`/`@removed` requirements |
 | `design.md` | The "how" - technical approach and architecture decisions |
 | `tasks.md` | Implementation checklist with checkboxes |
 
@@ -103,45 +104,44 @@ Delta specs are the key concept in OpenSpec. They show what's changing relative 
 
 ### The Format
 
-Delta specs use sections to indicate the type of change:
+Delta specs are Gherkin feature files. Each rule carries a tag for the type of change and the ID of the requirement:
 
-```markdown
-# Delta for Auth
+```gherkin
+Feature: Auth
 
-## ADDED Requirements
+  @added @REQ-0005
+  Rule: Two-Factor Authentication
+    The system MUST require a second factor during login.
 
-### Requirement: Two-Factor Authentication
-The system MUST require a second factor during login.
+    Scenario: OTP required
+      Given a user with 2FA enabled
+      When the user submits valid credentials
+      Then an OTP challenge is presented
 
-#### Scenario: OTP required
-- GIVEN a user with 2FA enabled
-- WHEN the user submits valid credentials
-- THEN an OTP challenge is presented
+  @modified @REQ-0002
+  Rule: Session Timeout
+    The system SHALL expire sessions after 30 minutes of inactivity.
+    (Previously: 60 minutes)
 
-## MODIFIED Requirements
+    Scenario: Idle timeout
+      Given an authenticated session
+      When 30 minutes pass without activity
+      Then the session is invalidated
 
-### Requirement: Session Timeout
-The system SHALL expire sessions after 30 minutes of inactivity.
-(Previously: 60 minutes)
-
-#### Scenario: Idle timeout
-- GIVEN an authenticated session
-- WHEN 30 minutes pass without activity
-- THEN the session is invalidated
-
-## REMOVED Requirements
-
-### Requirement: Remember Me
-(Deprecated in favor of 2FA)
+  @removed @REQ-0003
+  Rule: Remember Me
+    Deprecated in favor of 2FA.
 ```
+
+A new requirement gets a new ID; `openspec ids assign` fills in any that are missing. A modified or removed requirement keeps the ID it has in the main spec.
 
 ### What Happens on Archive
 
 When you archive a change:
 
-1. **ADDED** requirements are appended to the main spec
-2. **MODIFIED** requirements replace the existing version
-3. **REMOVED** requirements are deleted from the main spec
+1. **`@added`** requirements are appended to the main spec
+2. **`@modified`** requirements replace the requirement with the same ID
+3. **`@removed`** requirements are deleted from the main spec
 
 The change folder moves to `openspec/changes/archive/` for audit history.
 
@@ -185,26 +185,25 @@ Use CSS custom properties for theming with a React context
 for state management.
 ```
 
-**specs/ui/spec.md** - Delta showing new requirements:
+**specs/ui/spec.feature** - Delta showing new requirements:
 
-```markdown
-# Delta for UI
+```gherkin
+Feature: UI
 
-## ADDED Requirements
+  @added @REQ-0012
+  Rule: Theme Selection
+    The system SHALL allow users to choose between light and dark themes.
 
-### Requirement: Theme Selection
-The system SHALL allow users to choose between light and dark themes.
+    Scenario: Manual toggle
+      Given a user on any page
+      When the user clicks the theme toggle
+      Then the theme switches immediately
+      And the preference persists across sessions
 
-#### Scenario: Manual toggle
-- GIVEN a user on any page
-- WHEN the user clicks the theme toggle
-- THEN the theme switches immediately
-- AND the preference persists across sessions
-
-#### Scenario: System preference
-- GIVEN a user with no saved preference
-- WHEN the application loads
-- THEN the system's preferred color scheme is used
+    Scenario: System preference
+      Given a user with no saved preference
+      When the application loads
+      Then the system's preferred color scheme is used
 ```
 
 **tasks.md** - Implementation checklist:
@@ -249,7 +248,7 @@ During implementation, if you discover the design needs adjustment, just update 
 You: /opsx:archive
 
 AI:  Archiving add-dark-mode...
-     ✓ Merged specs into openspec/specs/ui/spec.md
+     ✓ Merged specs into openspec/specs/ui/spec.feature
      ✓ Moved to openspec/changes/archive/2025-01-24-add-dark-mode/
      Done! Ready for the next feature.
 ```

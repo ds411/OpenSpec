@@ -95,15 +95,15 @@ openspec validate --all --strict   # stricter checks, good for CI
 openspec validate --archived       # fail if archived changes have unchecked tasks
 ```
 
-Common causes are a missing required section (like a spec with no scenarios) or a malformed delta header. Fix the file and re-run. The [CLI reference](cli.md#openspec-validate) documents the output format.
+Common causes are a missing required part (like a requirement with no scenarios), a rule without an operation tag or ID, or a Gherkin syntax error. `openspec ids assign` fills in missing IDs for new requirements. Fix the file and re-run. The [CLI reference](cli.md#openspec-validate) documents the output format.
 
 One message deserves its own note:
 
 ```text
-MODIFIED "<requirement>" omits scenario(s) the current spec still has: "<scenario>"
+@modified REQ-0007 ("<requirement>") leaves out scenario(s) the current spec still has: "<scenario>"
 ```
 
-A `MODIFIED` requirement replaces the whole requirement block, so it has to carry every scenario that survives the change, not only the ones you edited. Copy the named scenarios from `openspec/specs/<capability-path>/spec.md` back into the delta, preserving any domain directories in the path. This often appears on an older change after someone else's change added a scenario to the same requirement — archive refuses that change either way, and validation now says so before you implement it.
+A `@modified` rule replaces the whole rule, so it has to carry every scenario that survives the change, not only the ones you edited. Copy the named scenarios from `openspec/specs/<capability-path>/spec.feature` back into the delta, preserving any domain directories in the path. To drop a scenario on purpose, keep it in the delta and tag it `@removed`. This often appears on an older change after someone else's change added a scenario to the same requirement — archive refuses that change either way, and validation now says so before you implement it.
 
 ### The AI created incomplete or wrong artifacts
 

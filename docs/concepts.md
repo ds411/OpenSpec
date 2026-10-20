@@ -58,13 +58,13 @@ Specs describe your system's behavior using structured requirements and scenario
 ```
 openspec/specs/
 ├── auth/
-│   └── spec.md           # Authentication behavior
+│   └── spec.feature      # Authentication behavior
 ├── payments/
-│   └── spec.md           # Payment processing
+│   └── spec.feature      # Payment processing
 ├── notifications/
-│   └── spec.md           # Notification system
+│   └── spec.feature      # Notification system
 └── ui/
-    └── spec.md           # UI behavior and themes
+    └── spec.feature      # UI behavior and themes
 ```
 
 Organize specs by domain — logical groupings that make sense for your system. Common patterns:
@@ -75,49 +75,54 @@ Organize specs by domain — logical groupings that make sense for your system. 
 
 ### Spec Format
 
-A spec contains requirements, and each requirement has scenarios:
+A spec is a Gherkin feature file. The `Feature:` is the capability, and the text under it is the Purpose. Each requirement is a `Rule:` with a stable ID tag, and each requirement has scenarios:
 
-```markdown
-# Auth Specification
+```gherkin
+Feature: Auth
+  Authentication and session management for the application.
 
-## Purpose
-Authentication and session management for the application.
+  @REQ-0001
+  Rule: User Authentication
+    The system SHALL issue a JWT token upon successful login.
 
-## Requirements
+    Scenario: Valid credentials
+      Given a user with valid credentials
+      When the user submits login form
+      Then a JWT token is returned
+      And the user is redirected to dashboard
 
-### Requirement: User Authentication
-The system SHALL issue a JWT token upon successful login.
+    Scenario: Invalid credentials
+      Given invalid credentials
+      When the user submits login form
+      Then an error message is displayed
+      And no token is issued
 
-#### Scenario: Valid credentials
-- GIVEN a user with valid credentials
-- WHEN the user submits login form
-- THEN a JWT token is returned
-- AND the user is redirected to dashboard
+  @REQ-0002
+  Rule: Session Expiration
+    The system MUST expire sessions after 30 minutes of inactivity.
 
-#### Scenario: Invalid credentials
-- GIVEN invalid credentials
-- WHEN the user submits login form
-- THEN an error message is displayed
-- AND no token is issued
-
-### Requirement: Session Expiration
-The system MUST expire sessions after 30 minutes of inactivity.
-
-#### Scenario: Idle timeout
-- GIVEN an authenticated session
-- WHEN 30 minutes pass without activity
-- THEN the session is invalidated
-- AND the user must re-authenticate
+    Scenario: Idle timeout
+      Given an authenticated session
+      When 30 minutes pass without activity
+      Then the session is invalidated
+      And the user must re-authenticate
 ```
 
 **Key elements:**
 
 | Element | Purpose |
 |---------|---------|
-| `## Purpose` | High-level description of this spec's domain |
-| `### Requirement:` | A specific behavior the system must have |
-| `#### Scenario:` | A concrete example of the requirement in action |
+| `Feature:` and its description | The capability, and a high-level description of its domain (the Purpose) |
+| `@REQ-0001` | The requirement's stable ID |
+| `Rule:` | A specific behavior the system must have; the text under it is the requirement statement |
+| `Scenario:` | A concrete example of the requirement in action |
 | SHALL/MUST/SHOULD | RFC 2119 keywords indicating requirement strength |
+
+### Requirement IDs
+
+Every requirement has an ID (`REQ-0001`, `REQ-0002`, ...) that stays the same for its whole life, even when the requirement is renamed or reworded. IDs come from one counter for the project, `openspec/requirement-ids.yaml`, so two capabilities never share one and a removed requirement's ID is never reused. That makes an ID a safe thing to point at from code, tests, tickets, and other specs.
+
+`openspec ids assign` gives an ID to every new rule that has none, and `openspec ids next` takes free IDs from the counter for a tool that writes the tags itself. Validation fails when a rule has no ID, so a missing one is caught before archive.
 
 ### Why Structure Specs This Way
 
@@ -174,7 +179,7 @@ In many teams, humans explore and agents draft artifacts. The intended loop is:
 
 1. Human provides intent, context, and constraints.
 2. Agent converts this into behavior-first requirements and scenarios.
-3. Agent keeps implementation detail in `design.md` and `tasks.md`, not `spec.md`.
+3. Agent keeps implementation detail in `design.md` and `tasks.md`, not `spec.feature`.
 4. Validation confirms structure and clarity before implementation.
 
 This keeps specs readable for humans and consistent for agents.
@@ -193,7 +198,7 @@ openspec/changes/add-dark-mode/
 ├── .openspec.yaml        # Change metadata (optional): schema, created, skip_specs, retire_capabilities, plus your own x-* keys
 └── specs/                # Delta specs
     └── ui/
-        └── spec.md       # What's changing in ui/spec.md
+        └── spec.feature  # What's changing in ui/spec.feature
 ```
 
 Each change is self-contained. It has:
@@ -351,51 +356,52 @@ Delta specs are the key concept that makes OpenSpec work for brownfield developm
 
 ### The Format
 
-```markdown
-# Delta for Auth
+A delta spec is a feature file with only the rules that change. Each rule carries an operation tag and the requirement's ID:
 
-## ADDED Requirements
+```gherkin
+Feature: Auth
 
-### Requirement: Two-Factor Authentication
-The system MUST support TOTP-based two-factor authentication.
+  @added @REQ-0003
+  Rule: Two-Factor Authentication
+    The system MUST support TOTP-based two-factor authentication.
 
-#### Scenario: 2FA enrollment
-- GIVEN a user without 2FA enabled
-- WHEN the user enables 2FA in settings
-- THEN a QR code is displayed for authenticator app setup
-- AND the user must verify with a code before activation
+    Scenario: 2FA enrollment
+      Given a user without 2FA enabled
+      When the user enables 2FA in settings
+      Then a QR code is displayed for authenticator app setup
+      And the user must verify with a code before activation
 
-#### Scenario: 2FA login
-- GIVEN a user with 2FA enabled
-- WHEN the user submits valid credentials
-- THEN an OTP challenge is presented
-- AND login completes only after valid OTP
+    Scenario: 2FA login
+      Given a user with 2FA enabled
+      When the user submits valid credentials
+      Then an OTP challenge is presented
+      And login completes only after valid OTP
 
-## MODIFIED Requirements
+  @modified @REQ-0002
+  Rule: Session Expiration
+    The system MUST expire sessions after 15 minutes of inactivity.
+    (Previously: 30 minutes)
 
-### Requirement: Session Expiration
-The system MUST expire sessions after 15 minutes of inactivity.
-(Previously: 30 minutes)
+    Scenario: Idle timeout
+      Given an authenticated session
+      When 15 minutes pass without activity
+      Then the session is invalidated
 
-#### Scenario: Idle timeout
-- GIVEN an authenticated session
-- WHEN 15 minutes pass without activity
-- THEN the session is invalidated
-
-## REMOVED Requirements
-
-### Requirement: Remember Me
-(Deprecated in favor of 2FA. Users should re-authenticate each session.)
+  @removed @REQ-0004
+  Rule: Remember Me
+    Deprecated in favor of 2FA. Users should re-authenticate each session.
 ```
 
-### Delta Sections
+### Delta Tags
 
-| Section | Meaning | What Happens on Archive |
-|---------|---------|------------------------|
-| `## ADDED Requirements` | New behavior | Appended to main spec |
-| `## MODIFIED Requirements` | Changed behavior | Replaces existing requirement |
-| `## REMOVED Requirements` | Deprecated behavior | Deleted from main spec; removing the last requirement retires the capability and deletes its spec file, when the change declares `retire_capabilities: true` |
-| `## Purpose` | What a brand-new capability is for | Seeds the Purpose of the main spec being created; ignored when the spec already exists |
+| Tag | Meaning | What Happens on Archive |
+|-----|---------|------------------------|
+| `@added` | New behavior, with a new ID | Appended to main spec |
+| `@modified` | Changed behavior, with the ID of the requirement it changes | Replaces the requirement with that ID; a new name renames it. The rule must keep every current scenario, unless a scenario is tagged `@removed` to drop it |
+| `@removed` | Deprecated behavior, with the ID of the requirement it removes | Deleted from main spec; removing the last requirement retires the capability and deletes its spec file, when the change declares `retire_capabilities: true` |
+| Feature description | What a brand-new capability is for | Seeds the Purpose of the main spec being created; ignored when the spec already exists |
+
+Archive matches requirements by ID, not by name, so a rename never loses the link between the old and new versions.
 
 ### Why Deltas Instead of Full Specs
 
@@ -514,7 +520,7 @@ Before archive:
 openspec/
 ├── specs/
 │   └── auth/
-│       └── spec.md ◄────────────────┐
+│       └── spec.feature ◄───────────┐
 └── changes/                         │
     └── add-2fa/                     │
         ├── proposal.md              │
@@ -522,7 +528,7 @@ openspec/
         ├── tasks.md                 │
         └── specs/                   │
             └── auth/                │
-                └── spec.md ─────────┘
+                └── spec.feature ────┘
 
 
 After archive:
@@ -530,7 +536,7 @@ After archive:
 openspec/
 ├── specs/
 │   └── auth/
-│       └── spec.md        # Now includes 2FA requirements
+│       └── spec.feature   # Now includes 2FA requirements
 └── changes/
     └── archive/
         └── 2025-01-24-add-2fa/    # Preserved for history
@@ -539,12 +545,12 @@ openspec/
             ├── tasks.md
             └── specs/
                 └── auth/
-                    └── spec.md
+                    └── spec.feature
 ```
 
 ### The Archive Process
 
-1. **Merge deltas.** Each delta spec section (ADDED/MODIFIED/REMOVED) is applied to the corresponding main spec.
+1. **Merge deltas.** Each delta rule (`@added`/`@modified`/`@removed`) is applied, by ID, to the corresponding main spec.
 
 2. **Move to archive.** The change folder moves to `changes/archive/` with a date prefix for chronological ordering.
 
@@ -615,9 +621,10 @@ openspec/
 | **Artifact** | A document within a change (proposal, design, tasks, or delta specs) |
 | **Archive** | The process of completing a change and merging its deltas into main specs |
 | **Change** | A proposed modification to the system, packaged as a folder with artifacts |
-| **Delta spec** | A spec that describes changes (ADDED/MODIFIED/REMOVED) relative to current specs |
+| **Delta spec** | A spec that describes changes (`@added`/`@modified`/`@removed` rules) relative to current specs |
 | **Domain** | A logical grouping for specs (e.g., `auth/`, `payments/`) |
-| **Requirement** | A specific behavior the system must have |
+| **Requirement** | A specific behavior the system must have, written as a Gherkin `Rule:` |
+| **Requirement ID** | A stable tag such as `@REQ-0001` that identifies a requirement for its whole life |
 | **Scenario** | A concrete example of a requirement, typically in Given/When/Then format |
 | **Schema** | A definition of artifact types and their dependencies |
 | **Spec** | A specification describing system behavior, containing requirements and scenarios |

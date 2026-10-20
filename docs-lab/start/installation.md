@@ -164,5 +164,5 @@ On Homebrew: `brew uninstall openspec`. On Deno: `deno uninstall --global opensp
 
 - Generated agent files: `openspec-*` skills and `opsx` commands under directories like `.claude/` or `.agents/`, per project. [Supported tools](../reference/supported-tools.md) lists each tool's paths; MiniMax Code keeps skills in `~/.minimax/skills`.
 - Leftovers from older versions: marker blocks in `CLAUDE.md` or `AGENTS.md` (delete the block, keep the file) and `opsx-*.md` prompts in `~/.codex/prompts`.
-- The `openspec/` folder: pause first. `specs/` and `changes/archive/` are your record of the system, plain Markdown that reads fine without OpenSpec.
+- The `openspec/` folder: pause first. `specs/` and `changes/archive/` are your record of the system, plain Markdown and Gherkin that read fine without OpenSpec.
 - Per-machine state: settings and the telemetry id in `~/.config/openspec/`; schema overrides and store registrations in `~/.local/share/openspec/` (Windows: `%APPDATA%\openspec`, `%LOCALAPPDATA%\openspec`). Registrations are pointers; the store repos they point to are untouched.

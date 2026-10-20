@@ -193,7 +193,7 @@ openspec/schemas/my-workflow/
 ├── schema.yaml           # Workflow definition
 └── templates/
     ├── proposal.md       # Template for proposal artifact
-    ├── spec.md           # Template for specs
+    ├── spec.feature      # Template for specs
     ├── design.md         # Template for design
     └── tasks.md          # Template for tasks
 ```

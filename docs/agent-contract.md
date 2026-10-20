@@ -47,12 +47,12 @@ deliberately remains the compatibility bare array documented in §4.13:
 ## 4. Command JSON shapes
 
 ### 4.1 `list --json`
-`{ "changes": [ { "name", "completedTasks", "totalTasks", "lastModified", "status": "no-tasks"|"complete"|"in-progress", "nested"?: ["<area>/<name>", ...] } ], "warnings"?: [ { "code", "name", "nested", "message" } ], "root": RootOutput }` — note the per-change `status` is a string enum here. `--specs`: `{ "specs": [ { "id", "requirementCount" } ], "root" }`.
+`{ "changes": [ { "name", "completedTasks", "totalTasks", "lastModified", "status": "no-tasks"|"complete"|"in-progress", "nested"?: ["<area>/<name>", ...] } ], "warnings"?: [ { "code", "name", "nested", "message" } ], "root": RootOutput }` — note the per-change `status` is a string enum here. `--specs`: `{ "specs": [ { "id", "requirementCount" } ], "warnings"?: [ { "code": "legacy_markdown_spec", "name", "message" } ], "root" }`; a warning names a capability whose main spec is still a markdown `spec.md`, which no command reads until `openspec convert-specs` converts it.
 
 `warnings` (omitted when empty) reports directories under `changes/` that are not changes. Today the only code is `nested_change_directory`: a namespace folder wrapping change directories, which OpenSpec cannot address because a change is always a directory directly under `changes/`. The same entry carries `nested` on the listed change, whose `status` is then meaningless. Do not treat such an entry as a change; report the message and leave the directories alone.
 
 ### 4.2 `show <item> --json`
-Change: `{ "id", "title", "deltaCount", "deltas": [...], "root" }`. Spec: `{ "id", "title", "overview", "requirementCount", "requirements": [...], "metadata": { "version", "format", "sourcePath"? }, "root" }`. A requirement, in a spec or in a change delta's `requirement`/`requirements`, is `{ "name", "text", "scenarios": [ { "name", "rawText" } ] }`. A requirement `name` is its header without `Requirement:` and without a closing `#` run, the exact name archive matches MODIFIED/REMOVED/RENAMED entries against. A scenario `name` is its level-4 header without `Scenario:` and without a closing `#` run, the name the MODIFIED scenario-loss check compares.
+Change: `{ "id", "title", "deltaCount", "deltas": [...], "root" }`. Spec: `{ "id", "title", "overview", "requirementCount", "requirements": [...], "metadata": { "version", "format", "sourcePath"? }, "root" }`. A requirement, in a spec or in a change delta's `requirement`/`requirements`, is `{ "id"?, "name", "text", "scenarios": [ { "name", "rawText" } ] }`. `id` is the rule's `@REQ-…` tag (omitted when the rule has none), the key archive matches `@modified`/`@removed` rules against. A requirement `name` is the text after `Rule:`; a `@modified` rule whose name differs from the main spec's renames the requirement. A scenario `name` is the text after `Scenario:`, the name the `@modified` scenario-loss check compares, and `rawText` is its steps. A delta's `operation` stays `ADDED`/`MODIFIED`/`REMOVED`, one for each operation tag.
 
 ### 4.3 `validate --json`
 `{ "items": [ { "id", "type": "change"|"spec", "valid", "issues": [ { "level", "path", "message", "line"?, "column"? } ], "durationMs" } ], "summary": { "totals": {items,passed,failed}, "byType": {...} }, "version": "1.0", "root" }`. Exit 1 when any item fails.
@@ -95,6 +95,12 @@ setup/register: `{ "store": {id, root, metadata_path?}, "registry": {path, regis
 ### 4.13 `schemas --json` / `templates --json`
 `schemas`: success remains a bare array `[ {name, description, artifacts, source} ]`; it resolves the canonical root-selection precedence and accepts `--store <id>`. Root-selection failure: `{ "schemas": [], "root": null, "status": [d] }`, exit 1. `templates`: keyed object `{ "<artifactId>": {path, source} }`, still cwd-based with no root/status keys.
 
+### 4.14 `ids assign --json` / `ids next --json`
+`assign`: `{ "assigned": [ { "file", "line", "rule", "id" } ], "problems": [ { "file", "line", "message" } ] }`, files relative to the root. Exit 1 when `problems` is not empty. `--dry-run` reports the same shape without writing. `next`: `{ "ids": ["REQ-0007", ...] }`; the IDs are reserved when printed. Failure: the null-shape (`assigned: [], problems: []` or `ids: []`) plus `status: [d]`, exit 1.
+
+### 4.15 `convert-specs --json`
+`{ "converted": [ { "kind": "spec"|"delta", "change"?, "capability", "source", "target", "requirements" } ], "ids": [ { "file", "rule", "id" } ], "problems": [ { "file", "message" } ], "warnings": [ { "file", "message" } ] }`, files relative to the root. Exit 1 when `problems` is not empty. Failure: the null-shape plus `status: [d]`, exit 1.
+
 ## 5. Exit-code contract
 
 | Situation | Exit | Stdout |
@@ -129,6 +135,9 @@ setup/register: `{ "store": {id, root, metadata_path?}, "registry": {path, regis
 
 ### Archive (JSON mode)
 `archive_change_name_required`, `archive_change_not_found`, `archive_change_symlink`, `archive_validation_failed`, `archive_confirmation_required`, `archive_tasks_incomplete`, `archive_spec_update_failed`, `archive_spec_validation_failed`, `archive_target_exists`, `archive_retirement_cleanup_failed`, `archive_error`.
+
+### Requirement IDs
+`ids_assign_failed`, `ids_next_failed`, `convert_specs_failed`.
 
 ### Context writes
 `context_file_exists`, `context_output_dir_missing`.

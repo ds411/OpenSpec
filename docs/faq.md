@@ -74,7 +74,7 @@ Usually not. Sync merges a change's delta specs into your main specs, and `/opsx
 
 ### How do I edit a proposal, spec, or task after I've started?
 
-Just edit the file. Every artifact is plain Markdown in `openspec/changes/<name>/`, and there's no locked phase or special edit mode. Change it by hand, or ask your AI to revise it ("update the design to use a queue"), then keep going. The AI always works from the current file contents. Full guide: [Editing & Iterating on a Change](editing-changes.md).
+Just edit the file. Every artifact is a plain-text file (Markdown, or Gherkin for specs) in `openspec/changes/<name>/`, and there's no locked phase or special edit mode. Change it by hand, or ask your AI to revise it ("update the design to use a queue"), then keep going. The AI always works from the current file contents. Full guide: [Editing & Iterating on a Change](editing-changes.md).
 
 ### Can I go back and change the plan after implementing some of it?
 
@@ -104,7 +104,7 @@ A spec describes observable behavior: what the system does, its inputs, outputs,
 
 ### What's a delta spec?
 
-A spec that describes only what's changing, using `ADDED`, `MODIFIED`, and `REMOVED` sections, rather than restating the whole spec. It's how OpenSpec handles edits to existing systems cleanly. See [Concepts](concepts.md#delta-specs).
+A spec that describes only what's changing, as Gherkin rules tagged `@added`, `@modified`, or `@removed`, rather than restating the whole spec. It's how OpenSpec handles edits to existing systems cleanly. See [Concepts](concepts.md#delta-specs).
 
 ### Where do archived changes go?
 
