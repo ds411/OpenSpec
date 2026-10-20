@@ -14,6 +14,7 @@ import { registerIdsCommand } from './commands/ids.js';
 import { registerConvertSpecsCommand } from './commands/convert-specs.js';
 import { registerContextCommand } from './commands/context.js';
 import { registerWorksetCommand } from './commands/workset.js';
+import { registerTraceCommand } from './commands/trace.js';
 import { DEFAULT_SCHEMA } from '../commands/workflow/default-schema.js';
 import type {
   StatusOptions,
@@ -584,6 +585,7 @@ registerIdsCommand(program);
 registerConvertSpecsCommand(program);
 registerContextCommand(program);
 registerWorksetCommand(program);
+registerTraceCommand(program);
 
 // Top-level validate command
 program

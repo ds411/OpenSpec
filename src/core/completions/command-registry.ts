@@ -873,5 +873,38 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
         ],
       },
     ],
+  },  {
+    name: 'trace',
+    description: 'Check that requirements and @trace comments in code point at each other',
+    flags: [],
+    subcommands: [
+      {
+        name: 'check',
+        description: 'Find requirements with no trace and traces to requirements that do not exist',
+        flags: [
+          {
+            name: 'untraced',
+            description: 'Only check for requirements with no trace',
+          },
+          {
+            name: 'orphans',
+            description: 'Only check for traces to requirements that do not exist',
+          },
+          COMMON_FLAGS.json,
+        ],
+      },
+      {
+        name: 'show',
+        description: 'List each file and line that traces to a requirement',
+        acceptsPositional: true,
+        positionals: [{ name: 'requirement-id' }],
+        flags: [COMMON_FLAGS.json],
+      },
+      {
+        name: 'report',
+        description: 'Show traced and total requirements for each capability',
+        flags: [COMMON_FLAGS.json],
+      },
+    ],
   },
 ];

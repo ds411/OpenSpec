@@ -85,6 +85,16 @@ export const ProjectConfigSchema = z.object({
     })
     .optional()
     .describe('GitHub Copilot integration preferences'),
+
+  // Optional: which files the @trace scanner reads. Globs are relative to the
+  // project root; with no include list, every file the scanner finds counts.
+  trace: z
+    .object({
+      include: z.array(z.string()).optional(),
+      exclude: z.array(z.string()).optional(),
+    })
+    .optional()
+    .describe('Glob lists that set which files the @trace scanner reads'),
 });
 
 /** Normalized in-memory shape of a referenced store declaration. */
@@ -243,6 +253,55 @@ function parseDeclarationList(raw: unknown): DeclarationEntry[] | undefined {
     );
   }
   return byId.size > 0 ? [...byId.values()] : undefined;
+}
+
+export const TRACE_GLOB_FIELDS = ['include', 'exclude'] as const;
+
+/**
+ * Parser for the `trace:` scope: `include` and `exclude` glob lists. Each
+ * list is checked on its own, so a bad `exclude` does not drop a good
+ * `include`. Empty strings drop with a warning; a list that ends up empty
+ * is left out.
+ */
+function parseTraceConfig(raw: unknown): ProjectConfig['trace'] | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    console.warn(`Invalid 'trace' field in config (must be an object)`);
+    return undefined;
+  }
+
+  const fields = raw as Record<string, unknown>;
+  const unknownFields = Object.keys(fields).filter(
+    (field) => !(TRACE_GLOB_FIELDS as readonly string[]).includes(field)
+  );
+  if (unknownFields.length > 0) {
+    console.warn(
+      `Unknown field(s) in 'trace': ${unknownFields.join(', ')}. Supported fields: ${TRACE_GLOB_FIELDS.join(', ')}`
+    );
+  }
+
+  const trace: NonNullable<ProjectConfig['trace']> = {};
+  for (const field of TRACE_GLOB_FIELDS) {
+    if (fields[field] === undefined) {
+      continue;
+    }
+    const result = z.array(z.string()).safeParse(fields[field]);
+    if (!result.success) {
+      console.warn(`Invalid 'trace.${field}' field in config (must be an array of glob strings), ignoring it`);
+      continue;
+    }
+    const globs = result.data.filter((glob) => glob.trim().length > 0);
+    if (globs.length < result.data.length) {
+      console.warn(`Some 'trace.${field}' globs are empty strings, ignoring them`);
+    }
+    if (globs.length > 0) {
+      trace[field] = globs;
+    }
+  }
+
+  return Object.keys(trace).length > 0 ? trace : undefined;
 }
 
 export const MAX_CONTEXT_SIZE = 50 * 1024; // 50KB hard limit, shared with the references index
@@ -440,6 +499,11 @@ export function readProjectConfig(projectRoot: string): ProjectConfig | null {
       } else {
         console.warn(`Invalid 'githubCopilot' field in config (must be an object)`);
       }
+    }
+
+    const trace = parseTraceConfig(raw.trace);
+    if (trace) {
+      config.trace = trace;
     }
 
     // Return partial config even if some fields failed

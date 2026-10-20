@@ -42,6 +42,7 @@ const COMMAND_IMPLEMENTATIONS: Record<string, string[]> = {
   templates: ['commands/workflow/templates.js'],
   schemas: ['commands/workflow/schemas.js'],
   new: ['commands/workflow/new-change.js'],
+  trace: ['commands/trace.js'],
 };
 
 const workDirs: string[] = [];
@@ -108,7 +109,7 @@ function implementationsLoaded(own: string[]): string[] {
 }
 
 describe('CLI startup loads only what the command needs', () => {
-  it.each(['--version', '--help', 'validate --help'])(
+  it.each(['--version', '--help', 'validate --help', 'trace --help'])(
     '`openspec %s` loads the command definitions and nothing else',
     async (invocation) => {
       await ensureCliBuilt();
@@ -226,6 +227,7 @@ describe('CLI startup loads only what the command needs', () => {
     ['convert-specs --dry-run --json', 'convert-specs'],
     ['schemas --json', 'schemas'],
     ['list --json', 'list'],
+    ['trace report --json', 'trace'],
   ])('`openspec %s` loads only the %s implementation', async (invocation, command) => {
     await ensureCliBuilt();
     const { own } = loadedModules(invocation.split(' '));
