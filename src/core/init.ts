@@ -60,6 +60,9 @@ import {
   toolSupportsSkills,
   type ToolSkillStatus,
   formatIdeRestart,
+  shouldGenerateAgentCommandsForTool,
+  writeAgentCommandFiles,
+  formatAgentCommandSkipNote,
 } from './shared/index.js';
 import { getGlobalConfig, type Delivery, type Profile } from './global-config.js';
 import { getProfileWorkflows, CORE_WORKFLOWS, ALL_WORKFLOWS } from './profiles.js';
@@ -957,6 +960,7 @@ export class InitCommand {
     failedTools: Array<{ name: string; error: Error }>;
     commandsSkipped: string[];
     skillsInvocableCommandSkips: string[];
+    agentCommandSkips: string[];
     removedCommandCount: number;
     removedSkillCount: number;
   }> {
@@ -965,6 +969,7 @@ export class InitCommand {
     const failedTools: Array<{ name: string; error: Error }> = [];
     const commandsSkipped: string[] = [];
     const skillsInvocableCommandSkips: string[] = [];
+    const agentCommandSkips: string[] = [];
     let removedCommandCount = 0;
     let removedSkillCount = 0;
 
@@ -1041,6 +1046,13 @@ export class InitCommand {
         if (shouldReconcileCommandFilesForTool(tool.value, delivery)) {
           removedCommandCount += await this.removeCommandFiles(projectPath, tool.value);
         }
+        // Agent commands ignore the profile and the delivery setting.
+        // @trace REQ-0369, REQ-0370
+        if (shouldGenerateAgentCommandsForTool(tool.value)) {
+          await writeAgentCommandFiles(projectPath, tool.value);
+        } else {
+          agentCommandSkips.push(tool.name);
+        }
         if (tool.value === 'github-copilot' && writeCopilotCloud) {
           await writeCopilotCloudFiles(projectPath);
         }
@@ -1078,6 +1090,7 @@ export class InitCommand {
       failedTools,
       commandsSkipped,
       skillsInvocableCommandSkips,
+      agentCommandSkips,
       removedCommandCount,
       removedSkillCount,
     };
@@ -1188,6 +1201,7 @@ export class InitCommand {
       failedTools: Array<{ name: string; error: Error }>;
       commandsSkipped: string[];
       skillsInvocableCommandSkips: string[];
+      agentCommandSkips: string[];
       removedCommandCount: number;
       removedSkillCount: number;
     },
@@ -1297,6 +1311,10 @@ export class InitCommand {
     }
     if (results.skillsInvocableCommandSkips.length > 0) {
       console.log(chalk.dim(`Commands skipped for: ${results.skillsInvocableCommandSkips.join(', ')} (uses skills)`));
+    }
+    const agentCommandSkipNote = formatAgentCommandSkipNote(results.agentCommandSkips);
+    if (agentCommandSkipNote) {
+      console.log(chalk.dim(agentCommandSkipNote));
     }
     if (results.removedCommandCount > 0) {
       console.log(chalk.dim(`Removed: ${results.removedCommandCount} command files (delivery: skills)`));

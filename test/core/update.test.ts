@@ -3575,6 +3575,50 @@ More user content after markers.
     });
   });
 
+  describe('scan agent command', () => {
+    it('restores a missing scan command file without --force', async () => {
+      await new InitCommand({ tools: 'claude', force: true }).execute(testDir);
+      const scanFile = path.join(testDir, '.claude', 'commands', 'opsx', 'scan.md');
+      const generated = await fs.readFile(scanFile, 'utf-8');
+      await fs.rm(scanFile);
+
+      await updateCommand.execute(testDir);
+
+      expect(await fs.readFile(scanFile, 'utf-8')).toBe(generated);
+    });
+
+    it('refreshes a changed scan command file without --force', async () => {
+      await new InitCommand({ tools: 'claude', force: true }).execute(testDir);
+      const scanFile = path.join(testDir, '.claude', 'commands', 'opsx', 'scan.md');
+      const generated = await fs.readFile(scanFile, 'utf-8');
+      await fs.writeFile(scanFile, 'stale scan command\n');
+
+      await updateCommand.execute(testDir);
+
+      expect(await fs.readFile(scanFile, 'utf-8')).toBe(generated);
+    });
+
+    it('keeps the scan command file when delivery changes to skills', async () => {
+      await new InitCommand({ tools: 'claude', force: true }).execute(testDir);
+
+      setMockConfig({ featureFlags: {}, profile: 'core', delivery: 'skills' });
+      await updateCommand.execute(testDir);
+
+      const commandsDir = path.join(testDir, '.claude', 'commands', 'opsx');
+      expect(await fs.readdir(commandsDir)).toEqual(['scan.md']);
+    });
+
+    it('says that a skills-only tool does not get the scan command', async () => {
+      await new InitCommand({ tools: 'codex', force: true }).execute(testDir);
+      const consoleSpy = vi.spyOn(console, 'log');
+
+      await new UpdateCommand({ force: true }).execute(testDir);
+
+      const output = consoleSpy.mock.calls.flat().map(String).join('\n');
+      expect(output).toContain("Agent command 'scan' not written for: Codex. This tool supports only skills.");
+    });
+  });
+
   describe('profile-aware updates', () => {
     it('should prune EasyCode profile and delivery changes while preserving user files', async () => {
       await new InitCommand({ tools: 'easycode', force: true }).execute(testDir);
@@ -3590,7 +3634,7 @@ More user content after markers.
       setMockConfig({ featureFlags: {}, profile: 'custom', delivery: 'commands', workflows: ['explore', 'new'] });
       await updateCommand.execute(testDir);
 
-      expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'new.toml', 'personal.toml']);
+      expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'new.toml', 'personal.toml', 'scan.toml']);
       const newCommand = parseToml(await fs.readFile(path.join(commandsDir, 'new.toml'), 'utf-8'));
       expect(newCommand.prompt).toContain('openspec');
       expect(await FileSystemUtils.fileExists(path.join(skillsDir, 'openspec-explore', 'SKILL.md'))).toBe(false);
@@ -3599,7 +3643,8 @@ More user content after markers.
       setMockConfig({ featureFlags: {}, profile: 'custom', delivery: 'skills', workflows: ['explore', 'new'] });
       await updateCommand.execute(testDir);
 
-      expect(await fs.readdir(commandsDir)).toEqual(['personal.toml']);
+      // The scan agent command ignores the delivery setting.
+      expect((await fs.readdir(commandsDir)).sort()).toEqual(['personal.toml', 'scan.toml']);
       for (const skillName of ['openspec-explore', 'openspec-new-change']) {
         expect(await fs.readFile(path.join(skillsDir, skillName, 'SKILL.md'), 'utf-8')).toContain(`name: ${skillName}`);
       }

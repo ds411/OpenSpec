@@ -12,7 +12,9 @@ import { OPENSPEC_CLI_ALLOWED_TOOLS } from '../../shared/allowed-tools.js';
 /**
  * Claude Code adapter for command generation.
  * File path: .claude/commands/opsx/<id>.md
- * Frontmatter: name, description, allowed-tools, category, tags
+ * Frontmatter: name, description, allowed-tools, category, tags, and
+ * disable-model-invocation for a command that only the user starts (Claude
+ * Code then keeps its description out of the model context).
  */
 export const claudeAdapter: ToolCommandAdapter = {
   toolId: 'claude',
@@ -21,6 +23,7 @@ export const claudeAdapter: ToolCommandAdapter = {
     return path.join('.claude', 'commands', 'opsx', `${commandId}.md`);
   },
 
+  // @trace REQ-0371
   formatFile(content: CommandContent): string {
     return `---
 name: ${escapeYamlValue(content.name)}
@@ -28,7 +31,7 @@ description: ${escapeYamlValue(content.description)}
 allowed-tools: ${OPENSPEC_CLI_ALLOWED_TOOLS}
 category: ${escapeYamlValue(content.category)}
 tags: ${formatTagsArray(content.tags)}
----
+${content.disableModelInvocation ? 'disable-model-invocation: true\n' : ''}---
 
 ${content.body}
 `;

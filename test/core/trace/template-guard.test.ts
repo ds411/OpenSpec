@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { getCommandTemplates, getSkillTemplates } from '../../../src/core/shared/skill-generation.js';
+import { getAgentCommandContents } from '../../../src/core/shared/agent-commands.js';
 import { findTracesInText } from '../../../src/core/trace/scanner.js';
 
 // `openspec init` writes skills, commands and schema templates into the user's
@@ -37,6 +38,13 @@ describe('generated agent files hold no trace', () => {
   it('command templates', () => {
     const found = getCommandTemplates().flatMap(({ template, id }) =>
       traceLines(template.content, `command ${id}`)
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('agent command templates', () => {
+    const found = getAgentCommandContents().flatMap((content) =>
+      traceLines(content.body, `agent command ${content.id}`)
     );
     expect(found).toEqual([]);
   });

@@ -3,6 +3,8 @@ import { Command } from 'commander';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { CommandAdapterRegistry, generateCommands } from '../../src/core/command-generation/index.js';
+import { getAgentCommandContents } from '../../src/core/shared/agent-commands.js';
 
 vi.mock('@inquirer/prompts', () => ({
   select: vi.fn(),
@@ -110,6 +112,12 @@ describe('config profile interactive flow', () => {
       const commandPath = path.join(projectDir, '.claude', 'commands', 'opsx', `${commandId}.md`);
       fs.mkdirSync(path.dirname(commandPath), { recursive: true });
       fs.writeFileSync(commandPath, `# ${commandId}\n`, 'utf-8');
+    }
+
+    // Agent commands are compared by content, so write what generation writes.
+    const claudeAdapter = CommandAdapterRegistry.get('claude')!;
+    for (const cmd of generateCommands(getAgentCommandContents(), claudeAdapter)) {
+      fs.writeFileSync(path.join(projectDir, cmd.path), cmd.fileContent, 'utf-8');
     }
   }
 

@@ -24,6 +24,8 @@ Then, in your AI chat:
 
 Your specs now describe exactly the part of the system that change touched, and nothing more. That's correct. You're done worrying about the other 80,000 lines.
 
+If you do want specs for the code you have now, `/opsx:scan` can write them for you: a team of agents reads the repository (or the paths you give it), writes Gherkin requirements for the behavior that exists, and adds `@trace` comments at the code that implements each one. You review the result as a normal git diff. See [`/opsx:scan`](commands.md#opsxscan).
+
 ## Why delta-first is the whole trick
 
 OpenSpec changes are written as **deltas**: rules tagged `@added`, `@modified`, or `@removed`. A delta describes what's changing relative to current behavior, not the entire system.

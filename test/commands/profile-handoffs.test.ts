@@ -5,6 +5,7 @@ import path from 'node:path';
 import { getGlobalDataDir, registerStore } from '../../src/core/index.js';
 import { ALL_WORKFLOWS, CORE_WORKFLOWS } from '../../src/core/profiles.js';
 import { getSkillTemplates } from '../../src/core/shared/skill-generation.js';
+import { AGENT_COMMAND_IDS } from '../../src/core/shared/agent-commands.js';
 import { createOpenSpecRoot } from '../helpers/openspec-fixtures.js';
 import { runCLI } from '../helpers/run-cli.js';
 
@@ -46,16 +47,17 @@ describe('profile handoff CLI regressions (#1734)', () => {
         path.join(project, '.claude', 'skills', dirName, 'SKILL.md')) : []),
       ...(delivery !== 'skills' ? CORE_WORKFLOWS.map(id =>
         path.join(project, '.claude', 'commands', 'opsx', `${id}.md`)) : []),
+      // Agent commands are written whatever the delivery setting is.
+      ...AGENT_COMMAND_IDS.map(id => path.join(project, '.claude', 'commands', 'opsx', `${id}.md`)),
     ];
     async function assertCore(): Promise<void> {
       if (delivery !== 'commands') {
         expect((await fs.readdir(path.join(project, '.claude', 'skills'))).sort())
           .toEqual(getSkillTemplates(CORE_WORKFLOWS).map(entry => entry.dirName).sort());
       }
-      if (delivery !== 'skills') {
-        expect((await fs.readdir(path.join(project, '.claude', 'commands', 'opsx'))).sort())
-          .toEqual(CORE_WORKFLOWS.map(id => `${id}.md`).sort());
-      }
+      expect((await fs.readdir(path.join(project, '.claude', 'commands', 'opsx'))).sort())
+        .toEqual([...(delivery !== 'skills' ? CORE_WORKFLOWS : []), ...AGENT_COMMAND_IDS]
+          .map(id => `${id}.md`).sort());
       for (const file of files) {
         const content = await fs.readFile(file, 'utf-8');
         expect(content, file).not.toMatch(/\/opsx:(continue|new)\b|openspec-(continue|new)-change/);

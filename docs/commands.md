@@ -35,6 +35,14 @@ for your tool. The files OpenSpec generates already use the right form.
 
 The default global profile is `core`. To enable expanded workflow commands, run `openspec config profile`, select workflows, then run `openspec update` in your project.
 
+### Agent Commands (every tool with command files)
+
+| Command | Purpose |
+|---------|---------|
+| `/opsx:scan` | Use a team of agents to write Gherkin requirements and `@trace` comments for existing code |
+
+An agent command is a command file only, never a skill, so nothing about it loads into the agent context until you run it. `openspec init` and `openspec update` write it for each configured tool that supports command files, whatever your profile and delivery settings are. Tools that support only skills (for example Codex and Warp) do not get it.
+
 ---
 
 ## Command Reference
@@ -675,6 +683,39 @@ AI:  Welcome to OpenSpec!
 - Uses real code, not toy examples
 - Creates a real change you can keep or discard
 - Takes 15-30 minutes to complete
+
+---
+
+### `/opsx:scan`
+
+Scan a repository with a team of agents. The scan writes Gherkin requirements for the behavior that the code has now, and adds `@trace` comments that connect the code to those requirements. It works on a repository with full, partial or no OpenSpec coverage: it keeps what exists and fills the gaps.
+
+**Syntax:**
+```
+/opsx:scan [paths...] [--as-change <name>] [--yes]
+```
+
+**Arguments:**
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `paths` | No | Scan only these folders or files (default: the whole repository) |
+| `--as-change <name>` | No | Write the new requirements as a change for review, not into `openspec/specs/` |
+| `--yes` | No | Do not stop for confirmation after the survey |
+
+**Phases:**
+1. **Survey (lead agent).** Reads `openspec list --specs --json`, `openspec trace report --json` and `openspec trace check --json`, divides the code into areas, and marks each area as full, partial or no coverage. Shows the plan and waits for your confirmation.
+2. **Spec wave (one helper per area, in parallel).** Each helper reads its area and writes new rules, without IDs, into the spec files that it owns.
+3. **ID step (lead agent only).** Runs `openspec ids assign` one time, so two agents cannot take the same ID.
+4. **Trace wave (one helper per area, in parallel).** Each helper adds `@trace` comments at the code that implements each requirement, and reports traces to IDs that do not exist.
+5. **Verify (lead agent).** Runs `openspec validate --specs --strict` and `openspec trace check`, fixes the gaps or lists them, and gives a summary.
+
+A tool that cannot start subagents does the same phases in sequence.
+
+**Tips:**
+- Start from a clean working tree: you review the result as a normal `git diff`
+- Run it again at any time; the survey sees what exists and the helpers only fill the gaps
+- In Claude Code the command file sets `disable-model-invocation: true`, so its description stays out of the context
+- The scan does not support specs in a store
 
 ---
 

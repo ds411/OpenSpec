@@ -8,7 +8,8 @@ import {
   WORKFLOW_TO_SKILL_DIR,
 } from '../../src/core/profile-sync-drift.js';
 import { CORE_WORKFLOWS } from '../../src/core/profiles.js';
-import { CommandAdapterRegistry } from '../../src/core/command-generation/index.js';
+import { CommandAdapterRegistry, generateCommands } from '../../src/core/command-generation/index.js';
+import { getAgentCommandContents } from '../../src/core/shared/agent-commands.js';
 
 function writeSkill(projectDir: string, workflowId: string): void {
   const skillDirName = WORKFLOW_TO_SKILL_DIR[workflowId as keyof typeof WORKFLOW_TO_SKILL_DIR];
@@ -32,10 +33,22 @@ function setupCoreSkills(projectDir: string): void {
   }
 }
 
+function writeAgentCommands(projectDir: string): string[] {
+  const adapter = CommandAdapterRegistry.get('claude');
+  if (!adapter) throw new Error('Claude adapter unavailable in test environment');
+  return generateCommands(getAgentCommandContents(), adapter).map((cmd) => {
+    const fullPath = path.join(projectDir, cmd.path);
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+    fs.writeFileSync(fullPath, cmd.fileContent);
+    return fullPath;
+  });
+}
+
 function setupCoreCommands(projectDir: string): void {
   for (const workflow of CORE_WORKFLOWS) {
     writeCommand(projectDir, workflow);
   }
+  writeAgentCommands(projectDir);
 }
 
 function setupCodexCoreSkills(projectDir: string): string {
@@ -175,6 +188,44 @@ describe('profile sync drift detection', () => {
     expect(
       hasToolProfileOrDeliveryDrift(tempDir, 'codex', CORE_WORKFLOWS, 'skills')
     ).toBe(true);
+  });
+
+  it.each(['both', 'skills', 'commands'] as const)(
+    'detects drift when an agent command file is missing (delivery=%s)',
+    (delivery) => {
+      if (delivery !== 'commands') setupCoreSkills(tempDir);
+      if (delivery !== 'skills') setupCoreCommands(tempDir);
+      else writeAgentCommands(tempDir);
+      expect(hasToolProfileOrDeliveryDrift(tempDir, 'claude', CORE_WORKFLOWS, delivery)).toBe(false);
+
+      fs.rmSync(path.join(tempDir, '.claude', 'commands', 'opsx', 'scan.md'));
+
+      expect(hasToolProfileOrDeliveryDrift(tempDir, 'claude', CORE_WORKFLOWS, delivery)).toBe(true);
+    }
+  );
+
+  it('detects drift when an agent command file differs from the generated content', () => {
+    setupCoreSkills(tempDir);
+    setupCoreCommands(tempDir);
+    const scanFile = path.join(tempDir, '.claude', 'commands', 'opsx', 'scan.md');
+    fs.writeFileSync(scanFile, fs.readFileSync(scanFile, 'utf-8') + 'local edit\n');
+
+    expect(hasProjectConfigDrift(tempDir, CORE_WORKFLOWS, 'both')).toBe(true);
+  });
+
+  it('accepts CRLF line endings in an agent command file', () => {
+    setupCoreSkills(tempDir);
+    setupCoreCommands(tempDir);
+    const scanFile = path.join(tempDir, '.claude', 'commands', 'opsx', 'scan.md');
+    fs.writeFileSync(scanFile, fs.readFileSync(scanFile, 'utf-8').replace(/\n/g, '\r\n'));
+
+    expect(hasProjectConfigDrift(tempDir, CORE_WORKFLOWS, 'both')).toBe(false);
+  });
+
+  it('does not expect agent command files for a skills-only tool', () => {
+    setupCodexCoreSkills(tempDir);
+
+    expect(hasToolProfileOrDeliveryDrift(tempDir, 'codex', CORE_WORKFLOWS, 'both')).toBe(false);
   });
 
   it('does not repeatedly report a divergent legacy Codex copy', () => {

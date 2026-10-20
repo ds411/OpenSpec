@@ -29,6 +29,9 @@ import {
   toolSupportsSkills,
   type ToolVersionStatus,
   formatIdeRestart,
+  shouldGenerateAgentCommandsForTool,
+  writeAgentCommandFiles,
+  formatAgentCommandSkipNote,
 } from './shared/index.js';
 import {
   detectLegacyArtifacts,
@@ -313,6 +316,7 @@ export class UpdateCommand {
     const updatedToolIds: string[] = [];
     const failedTools: ToolFailure[] = [...legacyUpgradeFailures];
     const skillsInvocableCommandSkips: string[] = [];
+    const agentCommandSkips: string[] = [];
     const zeroArtifactTools: string[] = [];
     let removedCommandCount = 0;
     let removedSkillCount = 0;
@@ -408,6 +412,14 @@ export class UpdateCommand {
           removedCommandCount += await this.removeCommandFiles(resolvedProjectPath, toolId);
         }
 
+        // Agent commands ignore the profile and the delivery setting.
+        // @trace REQ-0369, REQ-0370, REQ-0372
+        if (shouldGenerateAgentCommandsForTool(tool.value)) {
+          await writeAgentCommandFiles(resolvedProjectPath, tool.value);
+        } else {
+          agentCommandSkips.push(tool.name);
+        }
+
         spinner.succeed(`Updated ${tool.name}`);
         updatedTools.push(tool.name);
         updatedToolIds.push(tool.value);
@@ -444,6 +456,10 @@ export class UpdateCommand {
     }
     if (skillsInvocableCommandSkips.length > 0) {
       console.log(chalk.dim(`Commands skipped for: ${skillsInvocableCommandSkips.join(', ')} (uses skills)`));
+    }
+    const agentCommandSkipNote = formatAgentCommandSkipNote(agentCommandSkips);
+    if (agentCommandSkipNote) {
+      console.log(chalk.dim(agentCommandSkipNote));
     }
     if (removedCommandCount > 0) {
       console.log(chalk.dim(`Removed: ${removedCommandCount} command files (delivery: skills)`));
@@ -1373,6 +1389,9 @@ export class UpdateCommand {
             }
           }
         }
+
+        // Agent commands ignore the profile and the delivery setting.
+        await writeAgentCommandFiles(projectPath, tool.value);
 
         spinner.succeed(`Setup complete for ${tool.name}`);
         newlyConfigured.push(toolId);

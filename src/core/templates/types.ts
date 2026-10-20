@@ -17,4 +17,6 @@ export interface CommandTemplate {
   category: string;
   tags: string[];
   content: string;
+  /** Only the user starts the command; the model may not invoke it. */
+  disableModelInvocation?: boolean;
 }

@@ -30,6 +30,16 @@ export {
 } from './skill-generation.js';
 
 export {
+  AGENT_COMMAND_IDS,
+  type AgentCommandId,
+  getAgentCommandContents,
+  shouldGenerateAgentCommandsForTool,
+  writeAgentCommandFiles,
+  hasAgentCommandDrift,
+  formatAgentCommandSkipNote,
+} from './agent-commands.js';
+
+export {
   type SkillCapableTool,
   toolSupportsSkills,
   getSkillCapableTools,
