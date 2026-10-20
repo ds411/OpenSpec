@@ -206,6 +206,19 @@ export function mergeDelta(options: {
     const id = entry.rule.ids[0];
     const index = indexOf(id);
     if (index === -1) {
+      // A rule with the same name under another ID means the ID in the delta
+      // is wrong, not that the removal was already applied. A rule this delta
+      // adds or modifies may share the name: it replaces the removed one.
+      const touched = new Set([...plan.added, ...plan.modified].map((other) => other.rule.ids[0]));
+      const namesake = main.rules.find(
+        (rule) => sameName(rule.name, entry.rule.name) && !(rule.id && touched.has(rule.id))
+      );
+      if (options.mainContent !== undefined && namesake) {
+        throw new Error(
+          `${specName} @removed failed for ${id} ("${entry.rule.name}") - not in the current spec, but ` +
+            `${namesake.id ?? 'a rule without an ID'} has the same name. Check the requirement ID.`
+        );
+      }
       if (options.mainContent !== undefined) {
         warnings.push(
           `${specName} - @removed requirement ${id} ("${entry.rule.name}") is not in the current spec; treating it as already removed.`
@@ -233,7 +246,11 @@ export function mergeDelta(options: {
           'Copy them into the @modified rule, or keep them there tagged @removed to delete them on purpose.'
       );
     }
-    const text = renderDeltaRule(entry, ruleColumn);
+    let text = renderDeltaRule(entry, ruleColumn);
+    // A comment directly above the rule in the main spec stays with it, unless
+    // the delta rule brings comments of its own.
+    const kept = leadingComments(blocks[index].text);
+    if (kept.length > 0 && leadingComments(text).length === 0) text = [...kept, text].join('\n');
     if (normalizeBlock(text) !== normalizeBlock(blocks[index].text)) counts.modified++;
     blocks[index] = { id, text };
   }
@@ -340,6 +357,22 @@ function reindent(lines: string[], shift: number): string[] {
     const leading = line.match(/^ */)![0].length;
     return line.slice(Math.min(leading, -shift));
   });
+}
+
+/** The comment lines a rule block starts with. */
+function leadingComments(text: string): string[] {
+  const lines = text.split('\n');
+  const comments: string[] = [];
+  for (const line of lines) {
+    if (!/^\s*#/.test(line)) break;
+    comments.push(line);
+  }
+  return comments;
+}
+
+function sameName(a: string, b: string): boolean {
+  const fold = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return fold(a) === fold(b);
 }
 
 function normalizeBlock(text: string): string {

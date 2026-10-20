@@ -2,10 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 
 import { ArchiveCommand, isRetirableSpec } from '../../src/core/archive.js';
 import { retireSpec } from '../../src/core/specs-apply.js';
 import { Validator } from '../../src/core/validation/validator.js';
-import { MarkdownParser } from '../../src/core/parsers/markdown-parser.js';
-import { findMainSpecStructureIssues } from '../../src/core/parsers/spec-structure.js';
 import { VALIDATION_MESSAGES } from '../../src/core/validation/constants.js';
 import { formatLocalDate } from '../../src/utils/date.js';
+import { featureRule, featureSpec, type FixtureRequirement } from '../helpers/openspec-fixtures.js';
 import { constants as fsConstants, promises as fs, realpathSync } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -41,6 +40,34 @@ describe('ArchiveCommand', () => {
       'archive',
       '.openspec-archive.lock'
     );
+  }
+
+  /** Write `content` to `filePath`, creating its directory. */
+  async function put(filePath: string, content: string): Promise<string> {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content);
+    return filePath;
+  }
+
+  /** The main spec file of a capability under the test root. */
+  function mainSpecFile(capability: string): string {
+    return path.join(tempDir, 'openspec', 'specs', ...capability.split('/'), 'spec.feature');
+  }
+
+  /** The delta spec file of a capability in a change under the test root. */
+  function deltaFile(changeName: string, capability: string): string {
+    return path.join(
+      tempDir, 'openspec', 'changes', changeName, 'specs', ...capability.split('/'), 'spec.feature'
+    );
+  }
+
+  /** A delta spec: a feature holding the given rules. */
+  function delta(featureName: string, ...requirements: FixtureRequirement[]): string {
+    return `Feature: ${featureName}\n\n${requirements.map(featureRule).join('\n\n')}\n`;
+  }
+
+  async function archivedNames(): Promise<string[]> {
+    return fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
   }
 
   beforeEach(async () => {
@@ -233,8 +260,8 @@ describe('ArchiveCommand', () => {
         await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
         await fs.writeFile(path.join(changeDir, 'tasks.md'), '- [x] Done\n');
         await fs.writeFile(
-          path.join(changeDir, 'specs', 'auth', 'spec.md'),
-          '## ADDED Requirements\n'
+          path.join(changeDir, 'specs', 'auth', 'spec.feature'),
+          'Feature: auth\n'
         );
 
         await archiveCommand.execute('add-auth', {
@@ -697,32 +724,33 @@ describe('ArchiveCommand', () => {
         const deltaDir = path.join(changesDir, changeName, 'specs', 'linked-capability');
         await fs.mkdir(deltaDir, { recursive: true });
         await fs.writeFile(
-          path.join(deltaDir, 'spec.md'),
-          `# Linked Capability - Changes
-
-## ADDED Requirements
-
-### Requirement: The system SHALL archive through linked directories
-
-#### Scenario: Linked directories
-- **WHEN** the change is archived
-- **THEN** the delta is applied and the change is archived
-`
+          path.join(deltaDir, 'spec.feature'),
+          delta('Linked Capability', {
+            id: 'REQ-0001',
+            tags: ['added'],
+            name: 'The system SHALL archive through linked directories',
+            scenarios: [
+              {
+                name: 'Linked directories',
+                steps: ['When the change is archived', 'Then the delta is applied and the change is archived'],
+              },
+            ],
+          })
         );
 
         await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
         const mainSpec = await fs.readFile(
-          path.join(specsDir, 'linked-capability', 'spec.md'),
+          path.join(specsDir, 'linked-capability', 'spec.feature'),
           'utf-8'
         );
-        expect(mainSpec).toContain('### Requirement: The system SHALL archive through linked directories');
+        expect(mainSpec).toContain('Rule: The system SHALL archive through linked directories');
         await expect(fs.access(path.join(changesDir, changeName))).rejects.toThrow();
         const archived = await fs.readdir(path.join(changesDir, 'archive'));
         const archivedName = archived.find((name) => name.endsWith(`-${changeName}`));
         expect(archivedName).toBeDefined();
         await expect(
-          fs.access(path.join(changesDir, 'archive', archivedName!, 'specs', 'linked-capability', 'spec.md'))
+          fs.access(path.join(changesDir, 'archive', archivedName!, 'specs', 'linked-capability', 'spec.feature'))
         ).resolves.not.toThrow();
       }
     );
@@ -787,16 +815,19 @@ describe('ArchiveCommand', () => {
       await fs.rm(path.join(tempDir, 'openspec', 'changes'), { recursive: true, force: true });
       await fs.mkdir(deltaDir, { recursive: true });
       await fs.writeFile(
-        path.join(deltaDir, 'spec.md'),
-        `## ADDED Requirements
-
-### Requirement: The system SHALL survive EXDEV
-The system SHALL archive.
-
-#### Scenario: Cross device
-- **WHEN** rename fails with EXDEV
-- **THEN** the copy fallback archives the change
-`
+        path.join(deltaDir, 'spec.feature'),
+        delta('linked-capability', {
+          id: 'REQ-0001',
+          tags: ['added'],
+          name: 'The system SHALL survive EXDEV',
+          statement: 'The system SHALL archive.',
+          scenarios: [
+            {
+              name: 'Cross device',
+              steps: ['When rename fails with EXDEV', 'Then the copy fallback archives the change'],
+            },
+          ],
+        })
       );
       await fs.symlink(
         sharedChanges,
@@ -1023,367 +1054,259 @@ The system SHALL archive.
       );
     });
 
-    it('should update specs when archiving (delta-based ADDED) and include change name in skeleton', async () => {
+    it('should update specs when archiving (@added) and include change name in skeleton', async () => {
       const changeName = 'spec-feature';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'test-capability');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      
-      // Create delta-based change spec (ADDED requirement)
-      const specContent = `# Test Capability Spec - Changes
+      await put(
+        deltaFile(changeName, 'test-capability'),
+        delta('Test Capability', {
+          id: 'REQ-0001',
+          tags: ['added'],
+          name: 'The system SHALL provide test capability',
+          scenarios: [
+            { name: 'Basic test', steps: ['Given a test condition', 'When an action occurs', 'Then expected result happens'] },
+          ],
+        })
+      );
 
-## ADDED Requirements
-
-### Requirement: The system SHALL provide test capability
-
-#### Scenario: Basic test
-Given a test condition
-When an action occurs
-Then expected result happens`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-      
       // Execute archive with --yes flag and skip validation for speed
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-      
-      // Verify spec was created from skeleton and ADDED requirement applied
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'test-capability', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain('# test-capability Specification');
-      expect(updatedContent).toContain('## Purpose');
+
+      // The spec was created from the skeleton and the @added rule applied
+      const updatedContent = await fs.readFile(mainSpecFile('test-capability'), 'utf-8');
+      expect(updatedContent.startsWith('Feature: Test Capability\n')).toBe(true);
       expect(updatedContent).toContain(`created by archiving change ${changeName}`);
-      expect(updatedContent).toContain('## Requirements');
-      expect(updatedContent).toContain('### Requirement: The system SHALL provide test capability');
-      expect(updatedContent).toContain('#### Scenario: Basic test');
+      expect(updatedContent).toContain('  @REQ-0001\n  Rule: The system SHALL provide test capability');
+      expect(updatedContent).toContain('Scenario: Basic test');
+      expect(updatedContent).not.toContain('@added');
     });
 
-    it('should archive when ADDED requirements were already synced to the baseline (issue #1332)', async () => {
+    it('should archive when @added requirements were already synced to the baseline (issue #1332)', async () => {
       const changeName = 'early-synced-feature';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const requirementBlock = `### Requirement: The system SHALL provide a core abstraction layer
-
-#### Scenario: Layer is available
-- **WHEN** a consumer imports the layer
-- **THEN** the abstraction is available`;
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## ADDED Requirements\n\n${requirementBlock}`
-      );
+      const requirement: FixtureRequirement = {
+        id: 'REQ-0001',
+        name: 'The system SHALL provide a core abstraction layer',
+        scenarios: [
+          { name: 'Layer is available', steps: ['When a consumer imports the layer', 'Then the abstraction is available'] },
+        ],
+      };
+      await put(deltaFile(changeName, 'core-layer'), delta('Core Layer', { ...requirement, tags: ['added'] }));
 
       // Simulate the early-sync pattern: the requirement is already in the
       // main spec (identical content) before archive runs.
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n${requirementBlock}\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
+      const mainSpecContent = featureSpec('core-layer', 'Core abstraction layer.', [requirement]);
+      await put(mainSpecFile('core-layer'), mainSpecContent);
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       // Archive succeeds and the main spec keeps the requirement exactly once
-      const updatedContent = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      const occurrences = updatedContent.split('### Requirement: The system SHALL provide a core abstraction layer').length - 1;
-      expect(occurrences).toBe(1);
+      const updatedContent = await fs.readFile(mainSpecFile('core-layer'), 'utf-8');
+      expect(updatedContent).toBe(mainSpecContent);
 
-      const archives = await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(true);
       expect(process.exitCode).toBeUndefined();
     });
 
-    it('should still abort ADDED when an existing requirement has different content', async () => {
+    it('should still abort @added when the spec has a different requirement under that ID', async () => {
       const changeName = 'conflicting-added-feature';
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## ADDED Requirements\n\n### Requirement: The system SHALL provide a core abstraction layer\n\n#### Scenario: New behavior\n- **WHEN** a consumer imports the layer\n- **THEN** the new abstraction is available`
+      await put(
+        deltaFile(changeName, 'core-layer'),
+        delta('Core Layer', {
+          id: 'REQ-0001',
+          tags: ['added'],
+          name: 'The system SHALL provide a core abstraction layer',
+          scenarios: [
+            { name: 'New behavior', steps: ['When a consumer imports the layer', 'Then the new abstraction is available'] },
+          ],
+        })
       );
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n### Requirement: The system SHALL provide a core abstraction layer\n\n#### Scenario: Old behavior\n- **WHEN** a consumer imports the layer\n- **THEN** the old abstraction is available\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
+      const mainSpecContent = featureSpec('core-layer', 'Core abstraction layer.', [
+        {
+          id: 'REQ-0001',
+          name: 'The system SHALL provide a core abstraction layer',
+          scenarios: [
+            { name: 'Old behavior', steps: ['When a consumer imports the layer', 'Then the old abstraction is available'] },
+          ],
+        },
+      ]);
+      await put(mainSpecFile('core-layer'), mainSpecContent);
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       // Genuine conflict: archive aborts, nothing moves, main spec untouched
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('ADDED failed for header "### Requirement: The system SHALL provide a core abstraction layer" - already exists')
+        expect.stringContaining(
+          'core-layer @added failed for REQ-0001 ("The system SHALL provide a core abstraction layer") - the spec already has a requirement with this ID'
+        )
       );
       expect(process.exitCode).toBe(1);
       await expect(fs.access(changeDir)).resolves.toBeUndefined();
-      const untouched = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(untouched).toBe(mainSpecContent);
+      await expect(fs.readFile(mainSpecFile('core-layer'), 'utf-8')).resolves.toBe(mainSpecContent);
     });
 
-    it('should archive when RENAMED requirements were already synced to the baseline', async () => {
-      const changeName = 'early-synced-rename';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## RENAMED Requirements\n\n- FROM: \`### Requirement: The system SHALL provide an abstraction layer\`\n- TO: \`### Requirement: The system SHALL provide a core abstraction layer\`\n`
+    it('should abort when a delta names the same requirement ID twice', async () => {
+      // Contradictory delta: a requirement cannot be both modified and removed.
+      const changeName = 'modify-and-remove';
+      await put(
+        deltaFile(changeName, 'core-layer'),
+        delta(
+          'Core Layer',
+          { id: 'REQ-0001', tags: ['modified'], name: 'New name' },
+          { id: 'REQ-0001', tags: ['removed'], name: 'Old name', scenarios: [] }
+        )
       );
-
-      // Early-sync pattern: the main spec already carries the new header.
-      const renamedBlock = `### Requirement: The system SHALL provide a core abstraction layer\n\n#### Scenario: Layer is available\n- **WHEN** a consumer imports the layer\n- **THEN** the abstraction is available`;
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(mainSpecDir, 'spec.md'),
-        `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n${renamedBlock}\n`
-      );
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      const occurrences = updatedContent.split('### Requirement: The system SHALL provide a core abstraction layer').length - 1;
-      expect(occurrences).toBe(1);
-      expect(updatedContent).not.toContain('SHALL provide an abstraction layer');
-
-      const archives = await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
-      expect(process.exitCode).toBeUndefined();
-    });
-
-    it('should still abort RENAMED when neither the old nor the new header exists', async () => {
-      const changeName = 'broken-rename';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## RENAMED Requirements\n\n- FROM: \`### Requirement: A requirement that never existed\`\n- TO: \`### Requirement: A new name that also does not exist\`\n`
-      );
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n### Requirement: The system SHALL provide a core abstraction layer\n\n#### Scenario: Layer is available\n- **WHEN** a consumer imports the layer\n- **THEN** the abstraction is available\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
+      const mainSpecContent = featureSpec('core-layer', 'Core abstraction layer.', [
+        { id: 'REQ-0001', name: 'Old name' },
+      ]);
+      await put(mainSpecFile('core-layer'), mainSpecContent);
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('RENAMED failed for header "### Requirement: A requirement that never existed" - source not found')
+        expect.stringContaining('Requirement REQ-0001 appears more than once in this delta')
       );
       expect(process.exitCode).toBe(1);
-      await expect(fs.access(changeDir)).resolves.toBeUndefined();
-      const untouched = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(untouched).toBe(mainSpecContent);
+      await expect(fs.readFile(mainSpecFile('core-layer'), 'utf-8')).resolves.toBe(mainSpecContent);
     });
 
-    it('should abort when REMOVED names the FROM side of a RENAMED in the same delta', async () => {
-      // Contradictory delta: you cannot both rename and remove the same
-      // requirement. This used to fail incidentally at apply time (the rename
-      // consumed the old header, so REMOVED hit "not found"); now that a
-      // missing REMOVED target is treated as already synced, the conflict has
-      // to be rejected explicitly.
-      const changeName = 'rename-and-remove';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## RENAMED Requirements\n\n- FROM: \`### Requirement: Old name\`\n- TO: \`### Requirement: New name\`\n\n## REMOVED Requirements\n\n### Requirement: Old name\n`
-      );
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n### Requirement: Old name\n\n#### Scenario: Works\n- **WHEN** it runs\n- **THEN** it works\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('requirement present in multiple sections (RENAMED and REMOVED) for header "### Requirement: Old name"')
-      );
-      expect(process.exitCode).toBe(1);
-      const untouched = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(untouched).toBe(mainSpecContent);
-    });
-
-    it('should abort when REMOVED spells the renamed FROM header with different case', async () => {
-      const changeName = 'rename-and-remove-case';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## RENAMED Requirements\n\n- FROM: \`### Requirement: Old Name\`\n- TO: \`### Requirement: New Name\`\n\n## REMOVED Requirements\n\n### Requirement: old name\n`
-      );
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n### Requirement: Old Name\n\n#### Scenario: Works\n- **WHEN** it runs\n- **THEN** it works\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('requirement present in multiple sections (RENAMED and REMOVED) for header "### Requirement: Old Name" (REMOVED spells it "old name")')
-      );
-      expect(process.exitCode).toBe(1);
-      await expect(fs.access(changeDir)).resolves.not.toThrow();
-      const untouched = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(untouched).toBe(mainSpecContent);
-    });
-
-    it('should archive when REMOVED requirements were already synced to the baseline', async () => {
+    it('should archive when @removed requirements were already synced to the baseline', async () => {
       const changeName = 'early-synced-removal';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## REMOVED Requirements\n\n### Requirement: The system SHALL provide a legacy layer\n**Reason**: Replaced by the core abstraction layer.\n`
+      await put(
+        deltaFile(changeName, 'core-layer'),
+        delta('Core Layer', {
+          id: 'REQ-0002',
+          tags: ['removed'],
+          name: 'The system SHALL provide a legacy layer',
+          statement: 'Replaced by the core abstraction layer.',
+          scenarios: [],
+        })
       );
 
       // Early-sync pattern: the requirement was already removed from the main spec.
-      const keptBlock = `### Requirement: The system SHALL provide a core abstraction layer\n\n#### Scenario: Layer is available\n- **WHEN** a consumer imports the layer\n- **THEN** the abstraction is available`;
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n${keptBlock}\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
+      const mainSpecContent = featureSpec('core-layer', 'Core abstraction layer.', [{
+        id: 'REQ-0001',
+        name: 'The system SHALL provide a core abstraction layer',
+        scenarios: [
+          { name: 'Layer is available', steps: ['When a consumer imports the layer', 'Then the abstraction is available'] },
+        ],
+      }]);
+      await put(mainSpecFile('core-layer'), mainSpecContent);
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       // Archive succeeds with a warning instead of aborting
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('REMOVED requirement "The system SHALL provide a legacy layer" is not in the current spec')
+        expect.stringContaining(
+          '@removed requirement REQ-0002 ("The system SHALL provide a legacy layer") is not in the current spec'
+        )
       );
       // The skipped removal is not reported as applied
       expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('- 1 removed'));
-      // A no-op update must not churn the file with normalization differences
-      const updatedContent = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(updatedContent).toBe(mainSpecContent);
+      // A no-op update must not churn the file
+      await expect(fs.readFile(mainSpecFile('core-layer'), 'utf-8')).resolves.toBe(mainSpecContent);
       // ...and must not claim an update happened
       expect(console.log).toHaveBeenCalledWith('Specs already in sync; no files changed.');
       expect(console.log).not.toHaveBeenCalledWith('Specs updated successfully.');
 
-      const archives = await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(true);
       expect(process.exitCode).toBeUndefined();
     });
 
-    it('should archive when MODIFIED requirements were already synced to the baseline', async () => {
+    it('should archive when @modified requirements were already synced to the baseline', async () => {
       const changeName = 'early-synced-modify';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'mod-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const block = `### Requirement: Session handling\nThe system SHALL keep sessions.\n\n#### Scenario: Session persists\n- **WHEN** a user returns\n- **THEN** the session is restored`;
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Mod Layer - Changes\n\n## MODIFIED Requirements\n\n${block}\n`
-      );
+      const requirement: FixtureRequirement = {
+        id: 'REQ-0001',
+        name: 'Session handling',
+        statement: 'The system SHALL keep sessions.',
+        scenarios: [{ name: 'Session persists', steps: ['When a user returns', 'Then the session is restored'] }],
+      };
+      await put(deltaFile(changeName, 'mod-layer'), delta('Mod Layer', { ...requirement, tags: ['modified'] }));
 
       // Early-sync pattern: the modification is already applied to main.
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'mod-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# mod-layer Specification\n\n## Purpose\nSession layer behavior.\n\n## Requirements\n\n${block}\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
+      const mainSpecContent = featureSpec('mod-layer', 'Session layer behavior.', [requirement]);
+      await put(mainSpecFile('mod-layer'), mainSpecContent);
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      // An identical MODIFIED block is a no-op: no churned rewrite, no
+      // An identical @modified rule is a no-op: no churned rewrite, no
       // claimed update, no "~ 1 modified" in the totals.
-      const updatedContent = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(updatedContent).toBe(mainSpecContent);
+      await expect(fs.readFile(mainSpecFile('mod-layer'), 'utf-8')).resolves.toBe(mainSpecContent);
       expect(console.log).toHaveBeenCalledWith('Specs already in sync; no files changed.');
       expect(console.log).not.toHaveBeenCalledWith('Specs updated successfully.');
 
-      const archives = await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(true);
       expect(process.exitCode).toBeUndefined();
     });
 
-    it('should abort an already-synced RENAMED when a case variant of the source still exists', async () => {
-      // FROM missing + TO present normally means the rename was early-synced,
-      // but a fold-variant of FROM still in the spec means the header is a
-      // typo - the same near-miss guard REMOVED applies.
-      const changeName = 'typo-rename';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'rename-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Rename Layer - Changes\n\n## RENAMED Requirements\n- FROM: \`### Requirement: cache policy\`\n- TO: \`### Requirement: Eviction policy\`\n`
-      );
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'rename-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# rename-layer Specification\n\n## Purpose\nCache behavior.\n\n## Requirements\n\n### Requirement: Cache Policy\nThe system SHALL cache.\n\n#### Scenario: Cached\n- **WHEN** data repeats\n- **THEN** it is served from cache\n\n### Requirement: Eviction policy\nThe system SHALL evict.\n\n#### Scenario: Evicted\n- **WHEN** the cache is full\n- **THEN** old entries are dropped\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('RENAMED failed for header "### Requirement: cache policy" - source not found, but "### Requirement: Cache Policy" exists')
-      );
-      expect(process.exitCode).toBe(1);
-      await expect(fs.access(changeDir)).resolves.not.toThrow();
-      const untouched = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(untouched).toBe(mainSpecContent);
-    });
-
-    it('should abort when a REMOVED header near-misses an existing requirement (case/whitespace typo)', async () => {
-      // A fold-insensitive match in the current spec means the header is a
-      // typo, not an early-synced removal - that case must stay a hard abort.
+    it('should abort when a @removed ID is missing but a rule of that name has another ID', async () => {
+      // A rule with the same name under another ID means the ID in the delta is
+      // a typo, not an early-synced removal - that case must stay a hard abort.
       const changeName = 'typo-removal';
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## REMOVED Requirements\n\n### Requirement: legacy layer\n**Reason**: Replaced.\n`
+      await put(
+        deltaFile(changeName, 'core-layer'),
+        delta('Core Layer', { id: 'REQ-0010', tags: ['removed'], name: 'legacy  layer', scenarios: [] })
       );
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecContent = `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n### Requirement: Legacy Layer\n\n#### Scenario: Works\n- **WHEN** it runs\n- **THEN** it works\n`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpecContent);
+      const mainSpecContent = featureSpec('core-layer', 'Core abstraction layer.', [
+        { id: 'REQ-0001', name: 'Legacy Layer' },
+      ]);
+      await put(mainSpecFile('core-layer'), mainSpecContent);
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('REMOVED failed for header "### Requirement: legacy layer" - not found, but "### Requirement: Legacy Layer" exists')
+        expect.stringContaining(
+          '@removed failed for REQ-0010 ("legacy  layer") - not in the current spec, but REQ-0001 has the same name'
+        )
       );
       expect(process.exitCode).toBe(1);
       await expect(fs.access(changeDir)).resolves.not.toThrow();
-      const untouched = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(untouched).toBe(mainSpecContent);
+      await expect(fs.readFile(mainSpecFile('core-layer'), 'utf-8')).resolves.toBe(mainSpecContent);
     });
 
-    it('should surface the skipped REMOVED as a warning in --json output', async () => {
+    it('should apply a delta again when it replaces a removed rule with a same-named one', async () => {
+      // Remove REQ-0001 and add REQ-0002 under the same name. Once sync has
+      // applied that, archive applies it again: the namesake is the new rule.
+      const changeName = 'replace-rule';
+      await put(
+        deltaFile(changeName, 'core-layer'),
+        delta(
+          'Core Layer',
+          { id: 'REQ-0001', tags: ['removed'], name: 'Legacy Layer', scenarios: [] },
+          { id: 'REQ-0002', tags: ['added'], name: 'Legacy Layer', statement: 'The system SHALL keep a thin legacy layer.' }
+        )
+      );
+      const synced = featureSpec('core-layer', 'Core abstraction layer.', [
+        { id: 'REQ-0002', name: 'Legacy Layer', statement: 'The system SHALL keep a thin legacy layer.' },
+      ]);
+      await put(mainSpecFile('core-layer'), synced);
+
+      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
+
+      expect(process.exitCode).toBeUndefined();
+      await expect(fs.readFile(mainSpecFile('core-layer'), 'utf-8')).resolves.toBe(synced);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(true);
+    });
+
+    it('should surface the skipped @removed as a warning in --json output', async () => {
       const changeName = 'early-synced-removal-json';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'core-layer');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Core Layer - Changes\n\n## REMOVED Requirements\n\n### Requirement: The system SHALL provide a legacy layer\n**Reason**: Replaced.\n`
+      await put(
+        deltaFile(changeName, 'core-layer'),
+        delta('Core Layer', {
+          id: 'REQ-0002',
+          tags: ['removed'],
+          name: 'The system SHALL provide a legacy layer',
+          statement: 'Replaced.',
+          scenarios: [],
+        })
       );
-
-      const keptBlock = `### Requirement: The system SHALL provide a core abstraction layer\n\n#### Scenario: Layer is available\n- **WHEN** a consumer imports the layer\n- **THEN** the abstraction is available`;
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'core-layer');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(mainSpecDir, 'spec.md'),
-        `# core-layer Specification\n\n## Purpose\nCore abstraction layer.\n\n## Requirements\n\n${keptBlock}\n`
-      );
+      await put(mainSpecFile('core-layer'), featureSpec('core-layer', 'Core abstraction layer.', [{
+        id: 'REQ-0001',
+        name: 'The system SHALL provide a core abstraction layer',
+        scenarios: [
+          { name: 'Layer is available', steps: ['When a consumer imports the layer', 'Then the abstraction is available'] },
+        ],
+      }]));
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true, json: true });
 
@@ -1398,42 +1321,36 @@ Then expected result happens`;
       // The silent path must not swallow the skip: agents reading JSON get
       // the same signal humans get on stdout.
       expect(parsed.archive.warnings).toEqual([
-        expect.stringContaining('REMOVED requirement "The system SHALL provide a legacy layer" is not in the current spec'),
+        expect.stringContaining(
+          '@removed requirement REQ-0002 ("The system SHALL provide a legacy layer") is not in the current spec'
+        ),
       ]);
     });
 
     it('should merge nested delta specs into the same relative path (#1353)', async () => {
       const changeName = 'nested-spec-feature';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const nestedSpecDir = path.join(changeDir, 'specs', 'platform', 'example-capability');
-      await fs.mkdir(nestedSpecDir, { recursive: true });
-
-      const specContent = `# Nested Capability - Changes
-
-## ADDED Requirements
-
-### Requirement: Nested capability works
-The system SHALL discover capabilities stored below namespace directories.
-
-#### Scenario: Validate nested delta
-- **WHEN** the user validates the change
-- **THEN** OpenSpec detects the nested capability`;
-      await fs.writeFile(path.join(nestedSpecDir, 'spec.md'), specContent);
+      await put(
+        deltaFile(changeName, 'platform/example-capability'),
+        delta('Nested Capability', {
+          id: 'REQ-0001',
+          tags: ['added'],
+          name: 'Nested capability works',
+          statement: 'The system SHALL discover capabilities stored below namespace directories.',
+          scenarios: [
+            {
+              name: 'Validate nested delta',
+              steps: ['When the user validates the change', 'Then OpenSpec detects the nested capability'],
+            },
+          ],
+        })
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       // Delta merged into the same nested path under the main specs directory
-      const mainSpecPath = path.join(
-        tempDir,
-        'openspec',
-        'specs',
-        'platform',
-        'example-capability',
-        'spec.md'
-      );
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain('### Requirement: Nested capability works');
-      expect(updatedContent).toContain('#### Scenario: Validate nested delta');
+      const updatedContent = await fs.readFile(mainSpecFile('platform/example-capability'), 'utf-8');
+      expect(updatedContent).toContain('Rule: Nested capability works');
+      expect(updatedContent).toContain('Scenario: Validate nested delta');
 
       // Change directory moved to archive with the nested delta preserved
       const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
@@ -1445,677 +1362,133 @@ The system SHALL discover capabilities stored below namespace directories.
         'specs',
         'platform',
         'example-capability',
-        'spec.md'
+        'spec.feature'
       );
       await expect(fs.access(archivedDelta)).resolves.toBeUndefined();
     });
 
-    it('should allow REMOVED requirements when creating new spec file (issue #403)', async () => {
+    it('should allow @removed requirements when creating new spec file (issue #403)', async () => {
       const changeName = 'new-spec-with-removed';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'gift-card');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      
-      // Create delta spec with both ADDED and REMOVED requirements
-      // This simulates refactoring where old fields are removed and new ones are added
-      const specContent = `# Gift Card - Changes
-
-## ADDED Requirements
-
-### Requirement: Logo and Background Color
-The system SHALL support logo and backgroundColor fields for gift cards.
-
-#### Scenario: Display gift card with logo
-- **WHEN** a gift card is displayed
-- **THEN** it shows the logo and backgroundColor
-
-## REMOVED Requirements
-
-### Requirement: Image Field
-### Requirement: Thumbnail Field`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-      
-      // Execute archive - should succeed with warning about REMOVED requirements
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-      
-      // Verify warning was logged about REMOVED requirements being ignored
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Warning: gift-card - 2 REMOVED requirement(s) ignored for new spec (nothing to remove).')
+      // A refactor: old fields are removed and new ones are added
+      await put(
+        deltaFile(changeName, 'gift-card'),
+        delta(
+          'Gift Card',
+          {
+            id: 'REQ-0003',
+            tags: ['added'],
+            name: 'Logo and Background Color',
+            statement: 'The system SHALL support logo and backgroundColor fields for gift cards.',
+            scenarios: [
+              {
+                name: 'Display gift card with logo',
+                steps: ['When a gift card is displayed', 'Then it shows the logo and backgroundColor'],
+              },
+            ],
+          },
+          { id: 'REQ-0001', tags: ['removed'], name: 'Image Field', scenarios: [] },
+          { id: 'REQ-0002', tags: ['removed'], name: 'Thumbnail Field', scenarios: [] }
+        )
       );
 
+      // Archive succeeds with a warning about the @removed rules
+      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
+
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('Warning: gift-card - 2 @removed rule(s) ignored for new spec (nothing to remove).')
+      );
       // The ignored removals are not reported as applied
       expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('- 2 removed'));
-      
-      // Verify spec was created with only ADDED requirements
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'gift-card', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain('# gift-card Specification');
-      expect(updatedContent).toContain('### Requirement: Logo and Background Color');
-      expect(updatedContent).toContain('#### Scenario: Display gift card with logo');
-      // REMOVED requirements should not be in the final spec
-      expect(updatedContent).not.toContain('### Requirement: Image Field');
-      expect(updatedContent).not.toContain('### Requirement: Thumbnail Field');
-      
-      // Verify change was archived successfully
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.length).toBeGreaterThan(0);
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
+
+      // The spec was created with only the @added rule
+      const updatedContent = await fs.readFile(mainSpecFile('gift-card'), 'utf-8');
+      expect(updatedContent.startsWith('Feature: Gift Card\n')).toBe(true);
+      expect(updatedContent).toContain('Rule: Logo and Background Color');
+      expect(updatedContent).toContain('Scenario: Display gift card with logo');
+      expect(updatedContent).not.toContain('Image Field');
+      expect(updatedContent).not.toContain('Thumbnail Field');
+
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(true);
     });
 
-    it('should carry the delta Purpose into a new main spec (issue #1413)', async () => {
+    it('should carry the delta feature description into a new main spec as its Purpose (issue #1413)', async () => {
       const changeName = 'new-spec-with-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'loyalty');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `## Purpose
-
-Tracks loyalty points earned and redeemed across the storefront.
-
-## ADDED Requirements
-
-### Requirement: Earn Points
-The system SHALL award loyalty points on each completed order.
-
-#### Scenario: Order completes
-- **WHEN** an order completes
-- **THEN** points are credited to the customer
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
+      await put(
+        deltaFile(changeName, 'loyalty'),
+        [
+          'Feature: loyalty',
+          '  Tracks loyalty points earned and redeemed across the storefront.',
+          '',
+          '  # A note for reviewers of this change.',
+          '',
+          featureRule({
+            id: 'REQ-0001',
+            tags: ['added'],
+            name: 'Earn Points',
+            statement: 'The system SHALL award loyalty points on each completed order.',
+            scenarios: [
+              { name: 'Order completes', steps: ['When an order completes', 'Then points are credited to the customer'] },
+            ],
+          }),
+          '',
+        ].join('\n')
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'loyalty', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
+      const updatedContent = await fs.readFile(mainSpecFile('loyalty'), 'utf-8');
       expect(updatedContent).toContain('Tracks loyalty points earned and redeemed across the storefront.');
       expect(updatedContent).not.toContain('TBD - created by archiving change');
-      expect(updatedContent).toContain('### Requirement: Earn Points');
+      // A comment is not part of the description, so it stays in the delta.
+      expect(updatedContent).not.toContain('A note for reviewers');
+      expect(updatedContent).toContain('Rule: Earn Points');
     });
 
-    it('should keep fenced code inside a real delta Purpose (issue #1413)', async () => {
-      const changeName = 'new-spec-with-fenced-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'config-format');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `## Purpose
-
-Normalizes config files. The canonical shape is:
-
-\`\`\`yaml
-retries: 3
-\`\`\`
-
-## ADDED Requirements
-
-### Requirement: Normalize Config
-The system SHALL normalize config files on load.
-
-#### Scenario: Config normalized
-- **WHEN** a config file is loaded
-- **THEN** it is normalized to the canonical shape
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'config-format', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain('Normalizes config files. The canonical shape is:');
-      // The fenced example is part of the authored Purpose - masking fenced
-      // lines out of the body would silently truncate it.
-      expect(updatedContent).toContain('retries: 3');
-      expect(updatedContent).not.toContain('TBD - created by archiving change');
-    });
-
-    it('should keep the TBD Purpose placeholder when the delta has no Purpose (issue #1413)', async () => {
+    it('should keep the TBD Purpose placeholder when the delta has no description (issue #1413)', async () => {
       const changeName = 'new-spec-without-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'referrals');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `## ADDED Requirements
-
-### Requirement: Send Invite
-The system SHALL send a referral invite.
-
-#### Scenario: Invite sent
-- **WHEN** a customer refers a friend
-- **THEN** an invite email is sent
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
+      await put(
+        deltaFile(changeName, 'referrals'),
+        delta('referrals', {
+          id: 'REQ-0001',
+          tags: ['added'],
+          name: 'Send Invite',
+          statement: 'The system SHALL send a referral invite.',
+          scenarios: [
+            { name: 'Invite sent', steps: ['When a customer refers a friend', 'Then an invite email is sent'] },
+          ],
+        })
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'referrals', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
+      const updatedContent = await fs.readFile(mainSpecFile('referrals'), 'utf-8');
       expect(updatedContent).toContain(
         `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
       );
-    });
-
-    it('should keep the TBD placeholder when the only Purpose header is inside a code fence (issue #1413)', async () => {
-      const changeName = 'new-spec-with-fenced-header';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'payouts');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `## ADDED Requirements
-
-### Requirement: Send Payout
-The system SHALL send a payout. A main spec looks like:
-
-\`\`\`markdown
-## Purpose
-Illustration only - not this capability's purpose.
-\`\`\`
-
-#### Scenario: Payout sent
-- **WHEN** a payout is due
-- **THEN** it is sent
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'payouts', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-      expect(updatedContent).not.toContain("Illustration only - not this capability's purpose.\n## Requirements");
-    });
-
-    it('should keep the TBD placeholder when the delta Purpose section is empty (issue #1413)', async () => {
-      const changeName = 'new-spec-with-empty-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'notifications');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `## Purpose
-
-## ADDED Requirements
-
-### Requirement: Send Notification
-The system SHALL send a notification.
-
-#### Scenario: Notification sent
-- **WHEN** an event fires
-- **THEN** a notification is sent
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'notifications', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-    });
-
-    it('should fall back to the placeholder when the delta Purpose hides a requirement header (issue #1413)', async () => {
-      const changeName = 'new-spec-with-stray-header-in-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'widgets');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // A delta an agent can plausibly emit. Carrying this Purpose verbatim
-      // would put a requirement header outside ## Requirements and abort the
-      // archive - which succeeded before the Purpose carry-over existed.
-      const specContent = `## Purpose
-
-Handles widgets.
-
-### Requirement: Stray header
-
-## ADDED Requirements
-
-### Requirement: Real Requirement
-The system SHALL handle widgets.
-
-#### Scenario: Widget handled
-- **WHEN** a widget arrives
-- **THEN** it is handled
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'widgets', 'spec.md');
-      const updatedContent = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-      expect(updatedContent).not.toContain('### Requirement: Stray header');
-      expect(updatedContent).toContain('### Requirement: Real Requirement');
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Warning: widgets - delta Purpose ignored (it would leave the new spec unreadable)')
-      );
-
-      // The archive still completed rather than aborting.
-      const archives = await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
-    });
-
-    it('should fall back to the placeholder when the delta Purpose contains a heading (issue #1413)', async () => {
-      const changeName = 'new-spec-with-heading-in-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'gadgets');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // An `#` heading truncates the Purpose section when the spec is read back,
-      // leaving a spec whose own validator rejects it for having no Purpose.
-      const specContent = `## Purpose
-
-# Not a spec title
-Some body text that is comfortably longer than the strict-mode minimum length.
-
-## ADDED Requirements
-
-### Requirement: Handle Gadget
-The system SHALL handle gadgets.
-
-#### Scenario: Gadget handled
-- **WHEN** a gadget arrives
-- **THEN** it is handled
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'gadgets', 'spec.md'),
-        'utf-8'
-      );
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-      expect(updatedContent).not.toContain('# Not a spec title');
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('gadgets - delta Purpose ignored')
-      );
-      // The rebuilt spec must still satisfy the validator archive itself runs.
-      const report = await new Validator().validateSpecContent('gadgets', updatedContent);
-      expect(report.issues.filter(i => i.level === 'ERROR')).toHaveLength(0);
-    });
-
-    it('should fall back to the placeholder when the delta Purpose has an unterminated fence (issue #1413)', async () => {
-      const changeName = 'new-spec-with-unterminated-fence';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'mesh-config');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // The open fence masks everything after it, so the Purpose body would
-      // swallow the skeleton's own ## Requirements header.
-      const specContent = `## ADDED Requirements
-
-### Requirement: Normalize Mesh Config
-The system SHALL normalize mesh config.
-
-#### Scenario: Config normalized
-- **WHEN** config is loaded
-- **THEN** it is normalized
-
-## Purpose
-
-Normalizes configuration for every service in the mesh. Canonical shape:
-
-\`\`\`yaml
-retries: 3
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'mesh-config', 'spec.md'),
-        'utf-8'
-      );
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-      // Exactly one Requirements section, and the requirement is still visible.
-      expect(updatedContent.match(/^## Requirements$/gm)).toHaveLength(1);
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('mesh-config - delta Purpose ignored')
-      );
-      const report = await new Validator().validateSpecContent('mesh-config', updatedContent);
-      expect(report.issues.filter(i => i.level === 'ERROR')).toHaveLength(0);
-    });
-
-    it('should ignore a commented-out Purpose in favor of the real one (issue #1413)', async () => {
-      const changeName = 'new-spec-with-commented-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'loyalty-v2');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `<!--
-## Purpose
-Draft purpose the author commented out while rewriting the section.
--->
-
-## Purpose
-
-Manages the loyalty program end to end across the storefront and admin console.
-
-## ADDED Requirements
-
-### Requirement: Earn Points
-The system SHALL award loyalty points.
-
-#### Scenario: Points earned
-- **WHEN** an order completes
-- **THEN** points are credited
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'loyalty-v2', 'spec.md'),
-        'utf-8'
-      );
-      expect(updatedContent).toContain('Manages the loyalty program end to end');
-      expect(updatedContent).not.toContain('Draft purpose the author commented out');
-      expect(updatedContent).not.toContain('-->');
-    });
-
-    it.each([
-      [
-        'a section header hidden in a comment',
-        'requirements-hidden-in-comment',
-        'hidden-reqs',
-        `## Purpose
-Tracks widgets and keeps their state consistent across restarts.
-<!-- TODO(author): promote the list below to
-## Requirements
-so the sections line up. -->
-Widgets are the core unit of work.
-`,
-      ],
-      [
-        'a requirement header hidden in a comment',
-        'requirement-header-in-comment',
-        'hidden-req-header',
-        `## Purpose
-Tracks widgets and keeps their state consistent across restarts.
-<!--
-## Requirements
-### Requirement: Draft idea we did not ship
--->
-`,
-      ],
-      [
-        'an unterminated comment',
-        'unterminated-comment',
-        'dangling-comment',
-        `## Purpose
-Tracks widgets and keeps their state consistent across restarts.
-<!-- TODO: expand once the widget team confirms the retention policy.
-`,
-      ],
-      [
-        'a comment closed with the --!> terminator',
-        'bang-terminated-comment',
-        'bang-comment',
-        `## Purpose
-Tracks widgets and keeps their state consistent across restarts.
-<!-- TODO(author): promote the list below to
-## Requirements
-so the sections line up. --!>
-`,
-      ],
-    ])(
-      'should fall back to the placeholder when the delta Purpose has %s (issue #1413)',
-      async (_label, changeName, specFolder, purposeBlock) => {
-        const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', specFolder);
-        await fs.mkdir(changeSpecDir, { recursive: true });
-
-        await fs.writeFile(
-          path.join(changeSpecDir, 'spec.md'),
-          `${purposeBlock}
-## ADDED Requirements
-
-### Requirement: Widget Tracking
-The system SHALL track widgets.
-
-#### Scenario: Widget tracked
-- **WHEN** a widget is created
-- **THEN** it is tracked
-`
-        );
-
-        await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-        const updatedContent = await fs.readFile(
-          path.join(tempDir, 'openspec', 'specs', specFolder, 'spec.md'),
-          'utf-8'
-        );
-        // Markdown hidden in a comment is skipped by the section scan but still
-        // lands in the file, where it can hide the headers the parsers rely on
-        // and blank the document out in a markdown renderer.
-        expect(updatedContent).toContain(
-          `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-        );
-        expect(updatedContent).not.toContain('<!--');
-        expect(console.log).toHaveBeenCalledWith(
-          expect.stringContaining(`${specFolder} - delta Purpose ignored`)
-        );
-        expect(updatedContent.match(/^## Requirements$/gm)).toHaveLength(1);
-        const report = await new Validator().validateSpecContent(specFolder, updatedContent);
-        expect(report.issues.filter(i => i.level === 'ERROR')).toHaveLength(0);
-      }
-    );
-
-    it.each([
-      ['closed', '-->'],
-      ['unterminated', ''],
-    ])(
-      'should not read a Purpose out of a %s comment that opens above the header (issue #1413)',
-      async (label, terminator) => {
-        const changeName = `commented-out-purpose-${label}`;
-        const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', `co-${label}`);
-        await fs.mkdir(changeSpecDir, { recursive: true });
-
-        // An unterminated comment runs to end of file, so the header below it is
-        // commented out just as surely as it is inside a closed comment.
-        await fs.writeFile(
-          path.join(changeSpecDir, 'spec.md'),
-          `<!-- Draft the author commented out
-
-## Purpose
-
-Old abandoned purpose text that must not become the capability's Purpose.
-${terminator}
-
-## ADDED Requirements
-
-### Requirement: Route Events
-The system SHALL route events.
-
-#### Scenario: Event routed
-- **WHEN** an event arrives
-- **THEN** it is routed
-`
-        );
-
-        await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-        const updatedContent = await fs.readFile(
-          path.join(tempDir, 'openspec', 'specs', `co-${label}`, 'spec.md'),
-          'utf-8'
-        );
-        expect(updatedContent).toContain(
-          `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-        );
-        expect(updatedContent).not.toContain('Old abandoned purpose text');
-        const report = await new Validator().validateSpecContent(`co-${label}`, updatedContent);
-        expect(report.issues.filter(i => i.level === 'ERROR')).toHaveLength(0);
-      }
-    );
-
-    it('should carry a Purpose containing arrow notation (issue #1413)', async () => {
-      const changeName = 'new-spec-with-arrow-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'pipeline');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // `-->` is not a comment opener; it renders as text and hides nothing, so
-      // it must not be mistaken for the HTML-comment hazard.
-      const specContent = `## Purpose
-
-Routes events through the pipeline: ingest --> transform --> sink, retrying each hop.
-
-## ADDED Requirements
-
-### Requirement: Route Events
-The system SHALL route events through the pipeline.
-
-#### Scenario: Event routed
-- **WHEN** an event arrives
-- **THEN** it is routed
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'pipeline', 'spec.md'),
-        'utf-8'
-      );
-      expect(updatedContent).toContain('ingest --> transform --> sink');
-      expect(updatedContent).not.toContain('TBD - created by archiving change');
-    });
-
-    it('should keep the TBD placeholder when the delta Purpose is only a code fence (issue #1413)', async () => {
-      const changeName = 'new-spec-with-fenced-only-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'fenced-only');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // A code sample is not a description of the capability, so it counts as
-      // an absent Purpose rather than one worth carrying.
-      const specContent = `## Purpose
-
-\`\`\`yaml
-retries: 3
-\`\`\`
-
-## ADDED Requirements
-
-### Requirement: Retry Requests
-The system SHALL retry failed requests.
-
-#### Scenario: Request retried
-- **WHEN** a request fails
-- **THEN** it is retried
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'fenced-only', 'spec.md'),
-        'utf-8'
-      );
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-      expect(updatedContent).not.toContain('retries: 3');
-    });
-
-    it('should end the Purpose at the next heading outside a code fence (issue #1413)', async () => {
-      const changeName = 'new-spec-with-fenced-heading';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'fenced-heading');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // The fenced `## Requirements` must not be mistaken for the end of the
-      // Purpose section, nor for a real section once the spec is written.
-      const specContent = `## Purpose
-
-Documents the main spec shape for readers. A main spec looks like:
-
-\`\`\`markdown
-## Requirements
-
-### Requirement: Illustrative Only
-\`\`\`
-
-## ADDED Requirements
-
-### Requirement: Real Requirement
-The system SHALL do the real thing.
-
-#### Scenario: Real thing done
-- **WHEN** asked
-- **THEN** done
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'fenced-heading', 'spec.md'),
-        'utf-8'
-      );
-      // The whole fenced sample stays inside Purpose...
-      expect(updatedContent).toContain('Documents the main spec shape for readers.');
-      expect(updatedContent).toContain('### Requirement: Illustrative Only');
-      // ...and none of it is read as real structure.
-      expect(findMainSpecStructureIssues(updatedContent)).toHaveLength(0);
-      const spec = new MarkdownParser(updatedContent).parseSpec('fenced-heading');
-      expect(spec.requirements).toHaveLength(1);
-    });
-
-    it('should keep the placeholder when the delta Purpose is only an HTML comment (issue #1413)', async () => {
-      const changeName = 'new-spec-with-unfilled-template';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'unfilled');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // This is the shipped delta template left unfilled.
-      const specContent = `## Purpose
-<!-- New capabilities only: one or two sentences on what this capability is for. -->
-
-## ADDED Requirements
-
-### Requirement: Do Thing
-The system SHALL do the thing.
-
-#### Scenario: Thing done
-- **WHEN** asked
-- **THEN** done
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'unfilled', 'spec.md'),
-        'utf-8'
-      );
-      expect(updatedContent).toContain(
-        `TBD - created by archiving change ${changeName}. Update Purpose after archive.`
-      );
-      expect(updatedContent).not.toContain('New capabilities only');
     });
 
     it('should warn when a carried Purpose is under the strict-mode minimum (issue #1413)', async () => {
       const changeName = 'new-spec-with-brief-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'points');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const specContent = `## Purpose
-
-Tracks loyalty points.
-
-## ADDED Requirements
-
-### Requirement: Track Points
-The system SHALL track points.
-
-#### Scenario: Points tracked
-- **WHEN** an order completes
-- **THEN** points are tracked
-`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
+      await put(
+        deltaFile(changeName, 'points'),
+        [
+          'Feature: points',
+          '  Tracks loyalty points.',
+          '',
+          featureRule({
+            id: 'REQ-0001',
+            tags: ['added'],
+            name: 'Track Points',
+            statement: 'The system SHALL track points.',
+            scenarios: [{ name: 'Points tracked', steps: ['When an order completes', 'Then points are tracked'] }],
+          }),
+          '',
+        ].join('\n')
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const updatedContent = await fs.readFile(
-        path.join(tempDir, 'openspec', 'specs', 'points', 'spec.md'),
-        'utf-8'
-      );
+      const updatedContent = await fs.readFile(mainSpecFile('points'), 'utf-8');
       // The author's words are kept - the warning exists so the strict-mode
       // failure is not a surprise later.
       expect(updatedContent).toContain('Tracks loyalty points.');
@@ -2126,55 +1499,43 @@ The system SHALL track points.
 
     it('should not overwrite the Purpose of an existing main spec (issue #1413)', async () => {
       const changeName = 'existing-spec-with-purpose';
-      const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', 'billing');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'billing');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(mainSpecDir, 'spec.md'),
-        `# billing Specification
-
-## Purpose
-The established purpose that must survive archiving.
-
-## Requirements
-
-### Requirement: Charge Card
-The system SHALL charge the card on file.
-
-#### Scenario: Card charged
-- **WHEN** an invoice is due
-- **THEN** the card is charged
-`
+      await put(
+        mainSpecFile('billing'),
+        featureSpec('billing', 'The established purpose that must survive archiving.', [
+          {
+            id: 'REQ-0001',
+            name: 'Charge Card',
+            statement: 'The system SHALL charge the card on file.',
+            scenarios: [{ name: 'Card charged', steps: ['When an invoice is due', 'Then the card is charged'] }],
+          },
+        ])
       );
-
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `## Purpose
-
-A purpose written in the delta that must be ignored for an existing spec.
-
-## ADDED Requirements
-
-### Requirement: Refund Card
-The system SHALL refund the card on file.
-
-#### Scenario: Refund issued
-- **WHEN** a refund is approved
-- **THEN** the card is refunded
-`
+      await put(
+        deltaFile(changeName, 'billing'),
+        [
+          'Feature: billing',
+          '  A purpose written in the delta that must be ignored for an existing spec.',
+          '',
+          featureRule({
+            id: 'REQ-0002',
+            tags: ['added'],
+            name: 'Refund Card',
+            statement: 'The system SHALL refund the card on file.',
+            scenarios: [{ name: 'Refund issued', steps: ['When a refund is approved', 'Then the card is refunded'] }],
+          }),
+          '',
+        ].join('\n')
       );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const updatedContent = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
+      const updatedContent = await fs.readFile(mainSpecFile('billing'), 'utf-8');
       expect(updatedContent).toContain('The established purpose that must survive archiving.');
       expect(updatedContent).not.toContain('A purpose written in the delta that must be ignored');
-      expect(updatedContent).toContain('### Requirement: Refund Card');
+      expect(updatedContent).toContain('Rule: Refund Card');
       // Dropping it silently would be indistinguishable from it having worked.
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('billing - delta Purpose ignored; billing already has one')
+        expect.stringContaining('billing - delta feature description ignored; billing already has a Purpose')
       );
     });
 
@@ -2183,146 +1544,65 @@ The system SHALL refund the card on file.
         'the existing spec has no Purpose at all',
         'existing-spec-without-purpose',
         'no-purpose-yet',
-        `# no-purpose-yet Specification
-
-## Requirements
-
-### Requirement: Old Thing
-The system SHALL do the old thing.
-
-#### Scenario: Old done
-- **WHEN** asked
-- **THEN** done
-`,
+        featureSpec('no-purpose-yet', '', [{ id: 'REQ-0001', name: 'Old Thing' }]),
       ],
       [
         'the existing Purpose is identical to the delta Purpose',
         'existing-spec-with-same-purpose',
         'same-purpose',
-        `# same-purpose Specification
-
-## Purpose
-Shared purpose text that both files carry verbatim for this test case.
-
-## Requirements
-
-### Requirement: Old Thing
-The system SHALL do the old thing.
-
-#### Scenario: Old done
-- **WHEN** asked
-- **THEN** done
-`,
+        featureSpec('same-purpose', 'Shared purpose text that both files carry verbatim for this test case.', [
+          { id: 'REQ-0001', name: 'Old Thing' },
+        ]),
       ],
     ])(
       'should not warn about an ignored delta Purpose when %s (issue #1413)',
       async (_label, changeName, specFolder, mainSpec) => {
-        const changeSpecDir = path.join(tempDir, 'openspec', 'changes', changeName, 'specs', specFolder);
-        await fs.mkdir(changeSpecDir, { recursive: true });
-        const mainSpecDir = path.join(tempDir, 'openspec', 'specs', specFolder);
-        await fs.mkdir(mainSpecDir, { recursive: true });
-        await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpec);
-
-        await fs.writeFile(
-          path.join(changeSpecDir, 'spec.md'),
-          `## Purpose
-
-Shared purpose text that both files carry verbatim for this test case.
-
-## ADDED Requirements
-
-### Requirement: New Thing
-The system SHALL do the new thing.
-
-#### Scenario: New done
-- **WHEN** asked
-- **THEN** done
-`
+        await put(mainSpecFile(specFolder), mainSpec);
+        await put(
+          deltaFile(changeName, specFolder),
+          [
+            `Feature: ${specFolder}`,
+            '  Shared purpose text that both files carry verbatim for this test case.',
+            '',
+            featureRule({ id: 'REQ-0002', tags: ['added'], name: 'New Thing' }),
+            '',
+          ].join('\n')
         );
 
         await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-        // "already has one" is false when it has none, and noise when the two
-        // bodies match.
-        expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('already has one'));
+        // "already has a Purpose" is false when it has none, and noise when
+        // the two descriptions match.
+        expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('already has a Purpose'));
       }
     );
 
-    it('should still error on MODIFIED when creating new spec file', async () => {
+    it('should still error on @modified when creating new spec file', async () => {
       const changeName = 'new-spec-with-modified';
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'new-capability');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      
-      // Create delta spec with MODIFIED requirement (should fail for new spec)
-      const specContent = `# New Capability - Changes
+      await put(
+        deltaFile(changeName, 'new-capability'),
+        delta(
+          'New Capability',
+          { id: 'REQ-0001', tags: ['added'], name: 'New Feature', statement: 'New feature description.' },
+          { id: 'REQ-0002', tags: ['modified'], name: 'Existing Feature', statement: 'Modified content.' }
+        )
+      );
 
-## ADDED Requirements
-
-### Requirement: New Feature
-New feature description.
-
-## MODIFIED Requirements
-
-### Requirement: Existing Feature
-Modified content.`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-      
-      // Execute archive - should abort with error message (not throw, but log and return)
+      // Archive aborts with an error message (logged, not thrown)
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-      
-      // Verify error message mentions MODIFIED not allowed for new specs
+
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('new-capability: target spec does not exist; only ADDED requirements are allowed for new specs. MODIFIED and RENAMED operations require an existing spec.')
+        expect.stringContaining(
+          'new-capability: target spec does not exist; only @added rules are allowed for a new spec. @modified rules require an existing spec.'
+        )
       );
       expect(console.log).toHaveBeenCalledWith('Aborted. No files were changed.');
-      
-      // Verify spec was NOT created
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'new-capability', 'spec.md');
-      await expect(fs.access(mainSpecPath)).rejects.toThrow();
-      
-      // Verify change was NOT archived
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.some(a => a.includes(changeName))).toBe(false);
-    });
 
-    it('should still error on RENAMED when creating new spec file', async () => {
-      const changeName = 'new-spec-with-renamed';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'another-capability');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      
-      // Create delta spec with RENAMED requirement (should fail for new spec)
-      const specContent = `# Another Capability - Changes
-
-## ADDED Requirements
-
-### Requirement: New Feature
-New feature description.
-
-## RENAMED Requirements
-- FROM: \`### Requirement: Old Name\`
-- TO: \`### Requirement: New Name\``;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-      
-      // Execute archive - should abort with error message (not throw, but log and return)
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-      
-      // Verify error message mentions RENAMED not allowed for new specs
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('another-capability: target spec does not exist; only ADDED requirements are allowed for new specs. MODIFIED and RENAMED operations require an existing spec.')
-      );
-      expect(console.log).toHaveBeenCalledWith('Aborted. No files were changed.');
-      
-      // Verify spec was NOT created
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'another-capability', 'spec.md');
-      await expect(fs.access(mainSpecPath)).rejects.toThrow();
-      
-      // Verify change was NOT archived
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.some(a => a.includes(changeName))).toBe(false);
+      // The spec was NOT created, and the change was NOT archived
+      await expect(fs.access(mainSpecFile('new-capability'))).rejects.toThrow();
+      await expect(fs.access(changeDir)).resolves.not.toThrow();
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(false);
     });
 
     it('should throw error if change does not exist', async () => {
@@ -2618,7 +1898,7 @@ New feature description.
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
       const strayDir = path.join(changeDir, 'specs', 'notes');
       await fs.mkdir(strayDir, { recursive: true });
-      await fs.writeFile(path.join(strayDir, 'spec.md'), '# headerless notes\n');
+      await fs.writeFile(path.join(strayDir, 'spec.feature'), '# notes without a feature\n');
       await fs.writeFile(
         path.join(changeDir, '.openspec.yaml'),
         'schema: spec-driven\nskip_specs: true\n'
@@ -2701,8 +1981,8 @@ New feature description.
       await fs.mkdir(changeSpecDir, { recursive: true });
       
       // Create spec in change
-      const specContent = '# Test Capability Spec\n\nTest content';
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
+      const specContent = 'Feature: Test Capability\n  Test content\n';
+      await fs.writeFile(path.join(changeSpecDir, 'spec.feature'), specContent);
       
       // Execute archive with --skip-specs flag and noValidate to skip validation
       await archiveCommand.execute(changeName, { yes: true, skipSpecs: true, noValidate: true });
@@ -2713,8 +1993,7 @@ New feature description.
       );
       
       // Verify spec was NOT copied to main specs
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'test-capability', 'spec.md');
-      await expect(fs.access(mainSpecPath)).rejects.toThrow();
+      await expect(fs.access(mainSpecFile('test-capability'))).rejects.toThrow();
       
       // Verify change was still archived
       const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
@@ -2729,19 +2008,19 @@ New feature description.
       const changeSpecDir = path.join(changeDir, 'specs', 'unstable-capability');
       await fs.mkdir(changeSpecDir, { recursive: true });
 
-      const deltaSpec = `# Unstable Capability
-
-## ADDED Requirements
-
-### Requirement: Logging Feature
-**ID**: REQ-LOG-001
-
-The system will log all events.
-
-#### Scenario: Event recorded
-- **WHEN** an event occurs
-- **THEN** it is captured`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), deltaSpec);
+      // No requirement ID and no SHALL: validation would refuse it.
+      const deltaSpec = [
+        'Feature: Unstable Capability',
+        '',
+        '  @added',
+        '  Rule: Logging Feature',
+        '    The system will log all events.',
+        '',
+        '    Scenario: Event recorded',
+        '      When an event occurs',
+        '      Then it is captured',
+      ].join('\n');
+      await fs.writeFile(path.join(changeSpecDir, 'spec.feature'), deltaSpec);
       await fs.writeFile(path.join(changeDir, 'tasks.md'), '- [x] Task 1\n');
 
       const deltaSpy = vi.spyOn(Validator.prototype, 'validateChangeDeltaSpecs');
@@ -2763,138 +2042,53 @@ The system will log all events.
       }
     });
 
-    it.each(['legacy', 'MODIFIED', 'RENAMED', 'REMOVED'])('archives when the user declines %s sync', async (operation) => {
+    it.each(['untagged', 'modified', 'removed'] as const)('archives when the user declines %s sync', async (operation) => {
       const { confirmPrompt: confirm } = await import('../../src/utils/interactive.js');
       const mockConfirm = confirm as unknown as ReturnType<typeof vi.fn>;
-      
+
       const changeName = 'decline-specs-feature';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'test-capability');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      
       // These deltas cannot build a new main spec. Declining sync must still
-      // archive them without creating one, including the legacy no-operations case.
-      const specContent = operation === 'RENAMED'
-        ? '## RENAMED Requirements\n- FROM: `### Requirement: Old name`\n- TO: `### Requirement: New name`\n'
-        : operation !== 'legacy'
-          ? `## ${operation} Requirements
+      // archive them without creating one, including a delta whose rules carry
+      // no operation tag at all.
+      const requirement: FixtureRequirement = {
+        id: 'REQ-0001',
+        name: 'Test capability',
+        statement: 'The system SHALL provide test capability.',
+        scenarios: [{ name: 'Basic test', steps: ['When an action occurs', 'Then the expected result happens'] }],
+      };
+      const specContent =
+        operation === 'untagged'
+          ? featureSpec('Test Capability', 'This is a test capability specification.', [requirement])
+          : delta('Test Capability', { ...requirement, tags: [operation] });
+      await put(deltaFile(changeName, 'test-capability'), specContent);
 
-### Requirement: Test capability
-The system SHALL provide test capability.
-
-#### Scenario: Basic test
-- **WHEN** an action occurs
-- **THEN** the expected result happens
-`
-          : `# Test Capability Spec
-
-## Purpose
-This is a test capability specification.
-
-## Requirements
-
-### The system SHALL provide test capability
-
-#### Scenario: Basic test
-Given a test condition
-When an action occurs
-Then expected result happens`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), specContent);
-      
       // Mock confirm to return false (decline spec updates)
       mockConfirm.mockResolvedValueOnce(false);
-      
+
       // Execute archive without --yes flag
       await archiveCommand.execute(changeName);
-      
-      // Verify user was prompted about specs
+
+      // The user was prompted about specs
       expect(mockConfirm).toHaveBeenCalledWith({
         message: 'Proceed with spec updates?',
         default: true
       });
-      
-      // Verify skip message was logged
       expect(console.log).toHaveBeenCalledWith(
         'Skipping spec updates. Proceeding with archive.'
       );
-      
-      // Verify spec was NOT copied to main specs
-      const mainSpecPath = path.join(tempDir, 'openspec', 'specs', 'test-capability', 'spec.md');
-      await expect(fs.access(mainSpecPath)).rejects.toThrow();
-      
-      // Verify change was still archived
+
+      // The spec was NOT copied to main specs
+      await expect(fs.access(mainSpecFile('test-capability'))).rejects.toThrow();
+
+      // The change was still archived
       const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
       const archives = await fs.readdir(archiveDir);
       expect(archives.length).toBe(1);
       expect(archives[0]).toMatch(new RegExp(`\\d{4}-\\d{2}-\\d{2}-${changeName}`));
       expect(process.exitCode).not.toBe(1);
       await expect(
-        fs.readFile(path.join(archiveDir, archives[0], 'specs', 'test-capability', 'spec.md'), 'utf-8')
+        fs.readFile(path.join(archiveDir, archives[0], 'specs', 'test-capability', 'spec.feature'), 'utf-8')
       ).resolves.toBe(specContent);
-    });
-
-    it('warns about absorbed content before asking to apply the destructive spec update', async () => {
-      const { confirmPrompt: confirm } = await import('../../src/utils/interactive.js');
-      const mockConfirm = confirm as unknown as ReturnType<typeof vi.fn>;
-      const changeName = 'warn-before-spec-update';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'demo');
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'demo');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      await fs.mkdir(mainSpecDir, { recursive: true });
-
-      const mainSpec = `# demo Specification
-
-## Purpose
-This capability exists to exercise archive warning behavior.
-
-## Requirements
-
-### Requirement: Target
-The system SHALL target.
-
-#### Scenario: Target works
-- **WHEN** it runs
-- **THEN** it works
-
-   ### Notes
-Keep this note.
-
-### Requirement: Survivor
-The system SHALL survive.
-
-#### Scenario: Survivor works
-- **WHEN** it runs
-- **THEN** it survives
-`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainSpec);
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# demo - Changes
-
-## REMOVED Requirements
-
-### Requirement: Target
-**Reason**: It is obsolete.
-`
-      );
-
-      mockConfirm.mockReset();
-      mockConfirm.mockImplementationOnce(async () => {
-        expect(console.log).toHaveBeenCalledWith(
-          expect.stringContaining('"### Notes" sits inside requirement "Target"')
-        );
-        return false;
-      });
-
-      await archiveCommand.execute(changeName);
-
-      expect(mockConfirm).toHaveBeenCalledWith({
-        message: 'Proceed with spec updates?',
-        default: true,
-      });
-      await expect(fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8')).resolves.toBe(mainSpec);
-      await expect(fs.access(changeDir)).rejects.toThrow();
     });
 
     it('does not apply a stale retirement decision when discarded content changes at the prompt', async () => {
@@ -2904,36 +2098,36 @@ The system SHALL survive.
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
       const deltaDir = path.join(changeDir, 'specs', 'legacy-layer');
       const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'legacy-layer');
-      const target = path.join(mainSpecDir, 'spec.md');
+      const target = path.join(mainSpecDir, 'spec.feature');
       await fs.mkdir(deltaDir, { recursive: true });
       await fs.mkdir(mainSpecDir, { recursive: true });
       await fs.writeFile(path.join(changeDir, '.openspec.yaml'), 'schema: spec-driven\nretire_capabilities: true\n');
       await fs.writeFile(path.join(changeDir, 'tasks.md'), '- [x] Done\n');
       await fs.writeFile(
-        path.join(deltaDir, 'spec.md'),
-        `## REMOVED Requirements
-
-### Requirement: Legacy behavior
-**Reason**: It is retired.
-**Migration**: None.
-`
+        path.join(deltaDir, 'spec.feature'),
+        delta('legacy-layer', {
+          id: 'REQ-0001',
+          tags: ['removed'],
+          name: 'Legacy behavior',
+          statement: 'Reason: it is retired.',
+          scenarios: [],
+        })
       );
       await fs.writeFile(
         target,
-        `# legacy-layer Specification
-
-## Purpose
-This capability preserves legacy behavior for existing consumers.
-
-## Requirements
-
-### Requirement: Legacy behavior
-The system SHALL preserve legacy behavior.
-
-#### Scenario: Legacy behavior applies
-- **WHEN** legacy behavior is requested
-- **THEN** it remains available
-`
+        featureSpec('legacy-layer', 'This capability preserves legacy behavior for existing consumers.', [
+          {
+            id: 'REQ-0001',
+            name: 'Legacy behavior',
+            statement: 'The system SHALL preserve legacy behavior.',
+            scenarios: [
+              {
+                name: 'Legacy behavior applies',
+                steps: ['When legacy behavior is requested', 'Then it remains available'],
+              },
+            ],
+          },
+        ])
       );
 
       mockConfirm.mockReset();
@@ -2942,8 +2136,8 @@ The system SHALL preserve legacy behavior.
         await fs.writeFile(
           target,
           current.replace(
-            '- **THEN** it remains available',
-            '- **THEN** this concurrent edit remains available'
+            'Then it remains available',
+            'Then this concurrent edit remains available'
           )
         );
         return true;
@@ -2952,7 +2146,7 @@ The system SHALL preserve legacy behavior.
       await archiveCommand.execute(changeName);
 
       await expect(fs.readFile(target, 'utf-8')).resolves.toContain(
-        '- **THEN** this concurrent edit remains available'
+        'Then this concurrent edit remains available'
       );
       await expect(fs.access(changeDir)).resolves.not.toThrow();
       expect(process.exitCode).toBe(1);
@@ -2974,38 +2168,38 @@ The system SHALL preserve legacy behavior.
         'schema: spec-driven\nretire_capabilities: true\n'
       );
       await fs.writeFile(
-        path.join(deltaDir, 'spec.md'),
-        `## REMOVED Requirements
-
-### Requirement: Legacy behavior
-**Reason**: It is retired.
-**Migration**: None.
-`
+        path.join(deltaDir, 'spec.feature'),
+        delta('legacy-layer', {
+          id: 'REQ-0001',
+          tags: ['removed'],
+          name: 'Legacy behavior',
+          statement: 'Reason: it is retired.',
+          scenarios: [],
+        })
       );
       const target = path.join(
         tempDir,
         'openspec',
         'specs',
         'legacy-layer',
-        'spec.md'
+        'spec.feature'
       );
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(
         target,
-        `# legacy-layer Specification
-
-## Purpose
-This capability preserves legacy behavior for existing consumers.
-
-## Requirements
-
-### Requirement: Legacy behavior
-The system SHALL preserve legacy behavior.
-
-#### Scenario: Legacy behavior applies
-- **WHEN** legacy behavior is requested
-- **THEN** it remains available
-`
+        featureSpec('legacy-layer', 'This capability preserves legacy behavior for existing consumers.', [
+          {
+            id: 'REQ-0001',
+            name: 'Legacy behavior',
+            statement: 'The system SHALL preserve legacy behavior.',
+            scenarios: [
+              {
+                name: 'Legacy behavior applies',
+                steps: ['When legacy behavior is requested', 'Then it remains available'],
+              },
+            ],
+          },
+        ])
       );
 
       mockConfirm.mockReset();
@@ -3027,789 +2221,355 @@ The system SHALL preserve legacy behavior.
       );
     });
 
-    it('prints the loss warning before --yes writes the spec', async () => {
-      const changeName = 'warn-before-yes-write';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'demo');
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'demo');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(mainSpecDir, 'spec.md'),
-        `# demo Specification
-
-## Purpose
-This capability exists to exercise archive warning behavior.
-
-## Requirements
-
-### Requirement: Target
-The system SHALL target.
-
-#### Scenario: Target works
-- **WHEN** it runs
-- **THEN** it works
-
-   ### Notes
-Keep this note.
-
-### Requirement: Survivor
-The system SHALL survive.
-
-#### Scenario: Survivor works
-- **WHEN** it runs
-- **THEN** it survives
-`
-      );
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# demo - Changes
-
-## REMOVED Requirements
-
-### Requirement: Target
-**Reason**: It is obsolete.
-`
-      );
-
-      await archiveCommand.execute(changeName, { yes: true });
-
-      const output = (
-        console.log as unknown as { mock: { calls: unknown[][] } }
-      ).mock.calls.flat().map(String);
-      const warningIndex = output.findIndex((line) =>
-        line.includes('"### Notes" sits inside requirement "Target"')
-      );
-      const successIndex = output.indexOf('Specs updated successfully.');
-      expect(warningIndex).toBeGreaterThanOrEqual(0);
-      expect(successIndex).toBeGreaterThan(warningIndex);
-      await expect(fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8')).resolves.not.toContain(
-        'Keep this note.'
-      );
-      await expect(fs.access(changeDir)).rejects.toThrow();
-    });
-
-    it('should support header trim-only normalization for matching', async () => {
-      const changeName = 'normalize-headers';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'alpha');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // Create existing main spec with a requirement (no extra trailing spaces)
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'alpha');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainContent = `# alpha Specification
-
-## Purpose
-Alpha purpose.
-
-## Requirements
-
-### Requirement: Important Rule
-Some details.`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainContent);
-
-      // Change attempts to modify the same requirement but with trailing spaces after the name
-      const deltaContent = `# Alpha - Changes
-
-## MODIFIED Requirements
-
-### Requirement: Important Rule   
-Updated details.`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), deltaContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updated = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(updated).toContain('### Requirement: Important Rule');
-      expect(updated).toContain('Updated details.');
-    });
-
-    it('should apply operations in order: RENAMED → REMOVED → MODIFIED → ADDED', async () => {
+    it('should apply @removed, @modified and @added in one delta', async () => {
       const changeName = 'apply-order';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'beta');
-      await fs.mkdir(changeSpecDir, { recursive: true });
+      await put(
+        mainSpecFile('beta'),
+        featureSpec('beta', 'Beta purpose.', [
+          { id: 'REQ-0001', name: 'A', statement: 'content A' },
+          { id: 'REQ-0002', name: 'B', statement: 'content B' },
+        ])
+      );
 
-      // Main spec with two requirements A and B
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'beta');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainContent = `# beta Specification
-
-## Purpose
-Beta purpose.
-
-## Requirements
-
-### Requirement: A
-content A
-
-### Requirement: B
-content B`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainContent);
-
-      // Rename A->C, Remove B, Modify C, Add D
-      const deltaContent = `# Beta - Changes
-
-## RENAMED Requirements
-- FROM: \`### Requirement: A\`
-- TO: \`### Requirement: C\`
-
-## REMOVED Requirements
-### Requirement: B
-
-## MODIFIED Requirements
-### Requirement: C
-updated C
-
-## ADDED Requirements
-### Requirement: D
-content D`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), deltaContent);
+      // Rename and modify A (to C), remove B, add D
+      await put(
+        deltaFile(changeName, 'beta'),
+        delta(
+          'beta',
+          { id: 'REQ-0003', tags: ['added'], name: 'D', statement: 'content D' },
+          { id: 'REQ-0001', tags: ['modified'], name: 'C', statement: 'updated C' },
+          { id: 'REQ-0002', tags: ['removed'], name: 'B', scenarios: [] }
+        )
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const updated = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(updated).toContain('### Requirement: C');
-      expect(updated).toContain('updated C');
-      expect(updated).toContain('### Requirement: D');
-      expect(updated).not.toContain('### Requirement: A');
-      expect(updated).not.toContain('### Requirement: B');
+      const updated = await fs.readFile(mainSpecFile('beta'), 'utf-8');
+      expect(updated).toContain('  @REQ-0001\n  Rule: C\n    updated C');
+      expect(updated).toContain('  @REQ-0003\n  Rule: D');
+      expect(updated).not.toContain('Rule: A');
+      expect(updated).not.toContain('Rule: B');
+      expect(updated).not.toContain('REQ-0002');
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Totals: + 1, ~ 1, - 1, → 0'));
     });
 
-    it('should preserve source order and lineage when renaming requirements', async () => {
+    it('should keep a requirement in place, with its ID and comment, when @modified renames it', async () => {
       const changeName = 'rename-order';
-      const renamed = (pairs: Array<[string, string]>): string =>
-        `## RENAMED Requirements\n\n${pairs
-          .map(
-            ([from, to]) =>
-              `- FROM: \`### Requirement: ${from}\`\n- TO: \`### Requirement: ${to}\``
-          )
-          .join('\n\n')}`;
+      const names = (content: string) => [...content.matchAll(/^\s*Rule:\s*(.+?)\s*$/gm)].map((match) => match[1]);
+      const rules = (renamed: Record<string, string>) =>
+        ['A', 'B', 'C'].map((name, index) => ({
+          id: `REQ-000${index + 1}`,
+          name: renamed[name] ?? name,
+          statement: `Body ${name}.`,
+        }));
       const cases = [
-        { capability: 'first', names: ['A', 'B', 'C'], delta: renamed([['A', 'A2']]), expected: ['A2', 'B', 'C'] },
-        { capability: 'middle', names: ['A', 'B', 'C'], delta: renamed([['B', 'B2']]), expected: ['A', 'B2', 'C'] },
-        { capability: 'last', names: ['A', 'B', 'C'], delta: renamed([['C', 'C2']]), expected: ['A', 'B', 'C2'] },
-        {
-          capability: 'multiple',
-          names: ['A', 'B', 'C'],
-          delta: renamed([['B', 'B2'], ['A', 'A2']]),
-          expected: ['A2', 'B2', 'C'],
-        },
-        {
-          capability: 'chained',
-          names: ['X', 'A', 'Y'],
-          delta: renamed([['A', 'B'], ['B', 'C']]),
-          expected: ['X', 'C', 'Y'],
-        },
-        {
-          capability: 'modified',
-          names: ['A', 'B', 'C'],
-          delta: `${renamed([['B', 'B2']])}\n\n## MODIFIED Requirements\n\n### Requirement: B2\nModified body.`,
-          expected: ['A', 'B2', 'C'],
-          expectedContent: '### Requirement: B2\nModified body.',
-        },
-        {
-          capability: 'readded',
-          names: ['X', 'A', 'Y'],
-          delta: `${renamed([['A', 'B']])}\n\n## ADDED Requirements\n\n### Requirement: A\nNew body A.`,
-          expected: ['X', 'B', 'Y', 'A'],
-        },
-        {
-          capability: 'foreign-tail',
-          names: ['A', 'B', 'C'],
-          delta: renamed([['B', 'B2']]),
-          expected: ['A', 'B2', 'C'],
-          foreignTail: '### Notes\nAuthored note travels with B.',
-          expectedContent: '### Requirement: B2\nBody B.\n\n### Notes\nAuthored note travels with B.',
-        },
+        { capability: 'first', renamed: { A: 'A2' }, expected: ['A2', 'B', 'C'] },
+        { capability: 'middle', renamed: { B: 'B2' }, expected: ['A', 'B2', 'C'] },
+        { capability: 'last', renamed: { C: 'C2' }, expected: ['A', 'B', 'C2'] },
+        { capability: 'multiple', renamed: { B: 'B2', A: 'A2' }, expected: ['A2', 'B2', 'C'] },
       ];
 
       for (const item of cases) {
-        const mainSpecDir = path.join(tempDir, 'openspec', 'specs', item.capability);
-        const changeSpecDir = path.join(
-          tempDir,
-          'openspec',
-          'changes',
-          changeName,
-          'specs',
-          item.capability
+        const main = featureSpec(item.capability, 'Ordering fixture.', rules({})).replace(
+          '  @REQ-0002\n',
+          '  # Why B exists: a note that travels with B.\n  @REQ-0002\n'
         );
-        await fs.mkdir(mainSpecDir, { recursive: true });
-        await fs.mkdir(changeSpecDir, { recursive: true });
-        const blocks = item.names.map(
-          (name) =>
-            `### Requirement: ${name}\nBody ${name}.` +
-            (name === 'B' && item.foreignTail ? `\n\n${item.foreignTail}` : '')
-        );
-        await fs.writeFile(
-          path.join(mainSpecDir, 'spec.md'),
-          `# ${item.capability} Specification\n\n## Purpose\nOrdering fixture.\n\n## Requirements\n\n${blocks.join('\n\n')}\n`
-        );
-        await fs.writeFile(
-          path.join(changeSpecDir, 'spec.md'),
-          `# ${item.capability} - Changes\n\n${item.delta}\n`
-        );
+        await put(mainSpecFile(item.capability), main);
+        const modified = rules(item.renamed)
+          .filter((rule) => rule.name !== rules({}).find((original) => original.id === rule.id)!.name)
+          .map((rule) => ({ ...rule, tags: ['modified'] }));
+        await put(deltaFile(changeName, item.capability), delta(item.capability, ...modified));
       }
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       for (const item of cases) {
-        const updated = await fs.readFile(
-          path.join(tempDir, 'openspec', 'specs', item.capability, 'spec.md'),
-          'utf-8'
-        );
-        const names = [...updated.matchAll(/^### Requirement:\s*(.+?)\s*$/gm)].map(
-          (match) => match[1]
-        );
-        expect(names).toEqual(item.expected);
-        if (item.expectedContent) expect(updated).toContain(item.expectedContent);
+        const updated = await fs.readFile(mainSpecFile(item.capability), 'utf-8');
+        expect(names(updated)).toEqual(item.expected);
+        const bName = item.expected[1];
+        expect(updated).toContain(`  # Why B exists: a note that travels with B.\n  @REQ-0002\n  Rule: ${bName}\n`);
       }
-      const output = (console.log as unknown as { mock: { calls: unknown[][] } }).mock.calls
-        .flat()
-        .map(String)
-        .join('\n');
-      expect(output).not.toContain('sits inside requirement "B"');
     });
 
-    it('should keep the target and change untouched when a later rename collides', async () => {
-      const changeName = 'late-rename-collision';
+    it('should abort with error when @modified references a requirement ID the spec does not have', async () => {
+      const changeName = 'validate-missing';
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'demo');
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'demo');
-      const mainSpecPath = path.join(mainSpecDir, 'spec.md');
-      const changeSpecPath = path.join(changeSpecDir, 'spec.md');
-      const mainContent = `# demo Specification\n\n## Purpose\nTransaction fixture.\n\n## Requirements\n\n### Requirement: A\nBody A.\n\n### Requirement: B\nBody B.\n\n### Requirement: C\nBody C.\n`;
-      const changeContent = `# demo - Changes\n\n## RENAMED Requirements\n\n- FROM: \`### Requirement: A\`\n- TO: \`### Requirement: A2\`\n\n- FROM: \`### Requirement: A2\`\n- TO: \`### Requirement: C\`\n`;
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      await fs.writeFile(mainSpecPath, mainContent);
-      await fs.writeFile(changeSpecPath, changeContent);
+      const mainContent = featureSpec('gamma', 'Gamma purpose.', [{ id: 'REQ-0001', name: 'Present' }]);
+      await put(mainSpecFile('gamma'), mainContent);
+
+      // The delta tries to modify a requirement the spec does not have
+      await put(
+        deltaFile(changeName, 'gamma'),
+        delta('Gamma', { id: 'REQ-0009', tags: ['modified'], name: 'Missing', statement: 'new text' })
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'RENAMED failed for header "### Requirement: C" - target already exists'
-        )
+        expect.stringContaining('gamma @modified failed for REQ-0009 ("Missing") - not found in the current spec')
       );
-      expect(process.exitCode).toBe(1);
-      await expect(fs.readFile(mainSpecPath, 'utf-8')).resolves.toBe(mainContent);
-      await expect(fs.readFile(changeSpecPath, 'utf-8')).resolves.toBe(changeContent);
-      await expect(fs.access(changeDir)).resolves.not.toThrow();
-      const archives = await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'));
-      expect(archives.some((entry) => entry.includes(changeName))).toBe(false);
-    });
-
-    it('should abort with error when MODIFIED references non-existent requirements', async () => {
-      const changeName = 'validate-missing';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'gamma');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // Main spec with no requirements
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'gamma');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainContent = `# gamma Specification
-
-## Purpose
-Gamma purpose.
-
-## Requirements`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainContent);
-
-      // Delta tries to modify a non-existent requirement
-      const deltaContent = `# Gamma - Changes
-
-## MODIFIED Requirements
-### Requirement: Missing
-new text`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), deltaContent);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      // Should not change the main spec and should not archive the change dir
-      const still = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(still).toBe(mainContent);
-      // Change dir should still exist since operation aborted
+      // The main spec is unchanged and the change was not archived
+      await expect(fs.readFile(mainSpecFile('gamma'), 'utf-8')).resolves.toBe(mainContent);
       await expect(fs.access(changeDir)).resolves.not.toThrow();
     });
 
-    it('should abort stale MODIFIED blocks that would drop current scenarios (issue #1246)', async () => {
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'stale-modified');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecPath = path.join(mainSpecDir, 'spec.md');
-      const baseSpec = `# stale-modified Specification
+    it('should abort a stale @modified rule that would drop current scenarios (issue #1246)', async () => {
+      const shared: FixtureRequirement = {
+        id: 'REQ-0001',
+        name: 'Shared Rule',
+        statement: 'The system SHALL support the shared rule.',
+        scenarios: [{ name: 'Existing behavior', steps: ['When the original behavior runs', 'Then it succeeds'] }],
+      };
+      await put(mainSpecFile('stale-modified'), featureSpec('stale-modified', 'Stale modified purpose.', [shared]));
 
-## Purpose
-Stale modified purpose.
-
-## Requirements
-
-### Requirement: Shared Rule
-The system SHALL support the shared rule.
-
-#### Scenario: Existing behavior
-- **WHEN** the original behavior runs
-- **THEN** it succeeds`;
-      await fs.writeFile(mainSpecPath, baseSpec);
-
+      const withScenario = (name: string): FixtureRequirement => ({
+        ...shared,
+        tags: ['modified'],
+        scenarios: [
+          ...shared.scenarios!,
+          { name, steps: [`When ${name.toLowerCase()} runs`, 'Then it succeeds'] },
+        ],
+      });
       const changeA = 'modify-shared-a';
-      const changeADir = path.join(tempDir, 'openspec', 'changes', changeA);
-      const changeASpecDir = path.join(changeADir, 'specs', 'stale-modified');
-      await fs.mkdir(changeASpecDir, { recursive: true });
-      await fs.writeFile(path.join(changeASpecDir, 'spec.md'), `# Stale Modified - Change A
-
-## MODIFIED Requirements
-
-### Requirement: Shared Rule
-The system SHALL support the shared rule.
-
-#### Scenario: Existing behavior
-- **WHEN** the original behavior runs
-- **THEN** it succeeds
-
-#### Scenario: Behavior from A
-- **WHEN** change A behavior runs
-- **THEN** it succeeds`);
-
+      await put(deltaFile(changeA, 'stale-modified'), delta('Stale Modified', withScenario('Behavior from A')));
       const changeB = 'modify-shared-b';
       const changeBDir = path.join(tempDir, 'openspec', 'changes', changeB);
-      const changeBSpecDir = path.join(changeBDir, 'specs', 'stale-modified');
-      await fs.mkdir(changeBSpecDir, { recursive: true });
-      await fs.writeFile(path.join(changeBSpecDir, 'spec.md'), `# Stale Modified - Change B
-
-## MODIFIED Requirements
-
-### Requirement: Shared Rule
-The system SHALL support the shared rule.
-
-#### Scenario: Existing behavior
-- **WHEN** the original behavior runs
-- **THEN** it succeeds
-
-#### Scenario: Behavior from B
-- **WHEN** change B behavior runs
-- **THEN** it succeeds`);
+      await put(deltaFile(changeB, 'stale-modified'), delta('Stale Modified', withScenario('Behavior from B')));
 
       await archiveCommand.execute(changeA, { yes: true, noValidate: true });
       await archiveCommand.execute(changeB, { yes: true, noValidate: true });
 
-      const updated = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updated).toContain('#### Scenario: Existing behavior');
-      expect(updated).toContain('#### Scenario: Behavior from A');
-      expect(updated).not.toContain('#### Scenario: Behavior from B');
+      const updated = await fs.readFile(mainSpecFile('stale-modified'), 'utf-8');
+      expect(updated).toContain('Scenario: Existing behavior');
+      expect(updated).toContain('Scenario: Behavior from A');
+      expect(updated).not.toContain('Scenario: Behavior from B');
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining(
-          'stale-modified MODIFIED failed for header "### Requirement: Shared Rule" - current spec contains scenario(s) not present in the modified block: "Behavior from A"'
+          'stale-modified @modified failed for REQ-0001 ("Shared Rule") - the current spec has scenario(s) the modified rule leaves out: "Behavior from A"'
         )
       );
       expect(console.log).toHaveBeenCalledWith('Aborted. No files were changed.');
 
       await expect(fs.access(changeBDir)).resolves.not.toThrow();
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
+      const archives = await archivedNames();
       expect(archives.some(a => a.includes(changeA))).toBe(true);
       expect(archives.some(a => a.includes(changeB))).toBe(false);
     });
 
-    it('should abort MODIFIED that drops a duplicate-named scenario (issue #1246 multiplicity)', async () => {
-      // Residual blind spot after the original #1246 gate: findMissingCurrentScenarios
-      // used Set membership, so two current scenarios sharing a name were both
-      // considered "present" when the MODIFIED block kept only one of them.
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'dup-scenario');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecPath = path.join(mainSpecDir, 'spec.md');
-      await fs.writeFile(
-        mainSpecPath,
-        `# dup-scenario Specification
-
-## Purpose
-Duplicate scenario names within one requirement.
-
-## Requirements
-
-### Requirement: Login
-The system SHALL authenticate.
-
-#### Scenario: Validate
-- **WHEN** input is empty
-- **THEN** reject
-
-#### Scenario: Validate
-- **WHEN** input is malformed
-- **THEN** reject`
+    it('should let a @modified rule drop a scenario it tags @removed', async () => {
+      const changeName = 'drop-on-purpose';
+      await put(
+        mainSpecFile('purposeful-drop'),
+        featureSpec('purposeful-drop', 'Purposeful scenario removal.', [
+          {
+            id: 'REQ-0001',
+            name: 'Login',
+            scenarios: [
+              { name: 'Password', steps: ['When a password is given', 'Then the user signs in'] },
+              { name: 'Magic link', steps: ['When a magic link is used', 'Then the user signs in'] },
+            ],
+          },
+        ])
       );
-
-      const changeName = 'drop-one-validate';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'dup-scenario');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Drop One Validate - Change
-
-## MODIFIED Requirements
-
-### Requirement: Login
-The system SHALL authenticate.
-
-#### Scenario: Validate
-- **WHEN** input is empty
-- **THEN** reject`
+      await put(
+        deltaFile(changeName, 'purposeful-drop'),
+        [
+          'Feature: Purposeful Drop',
+          '',
+          '  @modified @REQ-0001',
+          '  Rule: Login',
+          '    The system SHALL support Login.',
+          '',
+          '    Scenario: Password',
+          '      When a password is given',
+          '      Then the user signs in',
+          '',
+          '    @removed',
+          '    Scenario: Magic link',
+          '      When a magic link is used',
+          '      Then the user signs in',
+          '',
+        ].join('\n')
       );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const updated = await fs.readFile(mainSpecPath, 'utf-8');
-      // Spec must be untouched — both Validate scenarios preserved
-      expect((updated.match(/#### Scenario: Validate/g) || []).length).toBe(2);
-      expect(updated).toContain('malformed');
+      const updated = await fs.readFile(mainSpecFile('purposeful-drop'), 'utf-8');
+      expect(updated).toContain('Scenario: Password');
+      expect(updated).not.toContain('Magic link');
+      expect(updated).not.toContain('@removed');
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(true);
+    });
+
+    it('should abort @modified that drops a duplicate-named scenario (issue #1246 multiplicity)', async () => {
+      // Two current scenarios that share a name must both be kept: a @modified
+      // rule that keeps one of them drops the other.
+      const login = (scenarios: Array<{ name: string; steps: string[] }>): FixtureRequirement => ({
+        id: 'REQ-0001',
+        name: 'Login',
+        statement: 'The system SHALL authenticate.',
+        scenarios,
+      });
+      const empty = { name: 'Validate', steps: ['When input is empty', 'Then reject'] };
+      const malformed = { name: 'Validate', steps: ['When input is malformed', 'Then reject'] };
+      const mainContent = featureSpec('dup-scenario', 'Duplicate scenario names within one requirement.', [
+        login([empty, malformed]),
+      ]);
+      await put(mainSpecFile('dup-scenario'), mainContent);
+
+      const changeName = 'drop-one-validate';
+      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
+      await put(deltaFile(changeName, 'dup-scenario'), delta('Drop One Validate', { ...login([empty]), tags: ['modified'] }));
+
+      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
+
+      // The spec is untouched: both Validate scenarios are kept
+      await expect(fs.readFile(mainSpecFile('dup-scenario'), 'utf-8')).resolves.toBe(mainContent);
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining(
-          'dup-scenario MODIFIED failed for header "### Requirement: Login" - current spec contains scenario(s) not present in the modified block: "Validate"'
+          'dup-scenario @modified failed for REQ-0001 ("Login") - the current spec has scenario(s) the modified rule leaves out: "Validate"'
         )
       );
       expect(console.log).toHaveBeenCalledWith('Aborted. No files were changed.');
 
       await expect(fs.access(changeDir)).resolves.not.toThrow();
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.some(a => a.includes(changeName))).toBe(false);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(false);
     });
 
-    it('should not treat a fenced scenario example in the current spec as real drift', async () => {
-      // The validator ignores fenced `#### Scenario:` lines (countScenarios is
-      // fence-aware); the drift check must agree, or a fenced sample in the
-      // current spec aborts an archive that validate said was fine.
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'fenced-current');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecPath = path.join(mainSpecDir, 'spec.md');
-      await fs.writeFile(
-        mainSpecPath,
-        `# fenced-current Specification
+    it('should abort when a @modified rule only mentions a dropped scenario inside a doc string', async () => {
+      // A "Scenario: Audit" line inside a doc string is text, so it does not
+      // keep the real Audit scenario the rule dropped.
+      const mainContent = featureSpec('docstring-incoming', 'Scenario names inside doc strings.', [
+        {
+          id: 'REQ-0001',
+          name: 'Access log',
+          statement: 'The system SHALL log access.',
+          scenarios: [{ name: 'Audit', steps: ['When a user signs in', 'Then an audit row is written'] }],
+        },
+      ]);
+      await put(mainSpecFile('docstring-incoming'), mainContent);
 
-## Purpose
-Fenced scenario samples in the current spec.
-
-## Requirements
-
-### Requirement: Reporting
-The system SHALL report results using the scenario format:
-
-\`\`\`markdown
-#### Scenario: Fenced sample
-- **WHEN** shown as an example
-- **THEN** it is not a real scenario
-\`\`\`
-
-#### Scenario: Emit report
-- **WHEN** a run finishes
-- **THEN** a report is emitted`
-      );
-
-      const changeName = 'edit-fenced-current';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'fenced-current');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Edit Fenced Current - Change
-
-## MODIFIED Requirements
-
-### Requirement: Reporting
-The system SHALL report results in JSON.
-
-#### Scenario: Emit report
-- **WHEN** a run finishes
-- **THEN** a JSON report is emitted`
+      const changeName = 'drop-audit-behind-docstring';
+      await put(
+        deltaFile(changeName, 'docstring-incoming'),
+        delta('Docstring Incoming', {
+          id: 'REQ-0001',
+          tags: ['modified'],
+          name: 'Access log',
+          statement: 'The system SHALL log access.',
+          scenarios: [
+            {
+              name: 'Trace',
+              steps: [
+                'When a request is served',
+                'Then a trace row reads:',
+                '  """',
+                '  Scenario: Audit',
+                '  """',
+              ],
+            },
+          ],
+        })
       );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      const updated = await fs.readFile(mainSpecPath, 'utf-8');
-      expect(updated).toContain('The system SHALL report results in JSON.');
-      expect(updated).toContain('a JSON report is emitted');
-      expect(console.log).not.toHaveBeenCalledWith(
-        expect.stringContaining('current spec contains scenario(s) not present in the modified block')
-      );
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.some(a => a.includes(changeName))).toBe(true);
-    });
-
-    it('should abort when a MODIFIED block only keeps a dropped scenario inside a fence', async () => {
-      // The inverse hole: a fenced `#### Scenario: Audit` in the incoming block
-      // must not count as keeping the real Audit scenario the block dropped.
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'fenced-incoming');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainSpecPath = path.join(mainSpecDir, 'spec.md');
-      await fs.writeFile(
-        mainSpecPath,
-        `# fenced-incoming Specification
-
-## Purpose
-Fenced scenario names in the incoming block.
-
-## Requirements
-
-### Requirement: Access log
-The system SHALL log access.
-
-#### Scenario: Audit
-- **WHEN** a user signs in
-- **THEN** an audit row is written`
-      );
-
-      const changeName = 'drop-audit-behind-fence';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'fenced-incoming');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-      await fs.writeFile(
-        path.join(changeSpecDir, 'spec.md'),
-        `# Drop Audit Behind Fence - Change
-
-## MODIFIED Requirements
-
-### Requirement: Access log
-The system SHALL log access, for example:
-
-\`\`\`markdown
-#### Scenario: Audit
-- **WHEN** shown as an example
-- **THEN** it is not a real scenario
-\`\`\`
-
-#### Scenario: Trace
-- **WHEN** a request is served
-- **THEN** a trace row is written`
-      );
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-
-      const updated = await fs.readFile(mainSpecPath, 'utf-8');
-      // Spec must be untouched — the real Audit scenario preserved.
-      expect(updated).toContain('an audit row is written');
-      expect(updated).not.toContain('Trace');
+      // The spec is untouched: the real Audit scenario is kept
+      await expect(fs.readFile(mainSpecFile('docstring-incoming'), 'utf-8')).resolves.toBe(mainContent);
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining(
-          'fenced-incoming MODIFIED failed for header "### Requirement: Access log" - current spec contains scenario(s) not present in the modified block: "Audit"'
+          'docstring-incoming @modified failed for REQ-0001 ("Access log") - the current spec has scenario(s) the modified rule leaves out: "Audit"'
         )
       );
       expect(console.log).toHaveBeenCalledWith('Aborted. No files were changed.');
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.some(a => a.includes(changeName))).toBe(false);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(false);
     });
 
-    it('should abort with a structural error when target spec hides requirements outside ## Requirements', async () => {
-      const changeName = 'hidden-requirement-target';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'delta-target');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'delta-target');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const malformedMain = `# delta-target Specification
-
-## Purpose
-Delta target purpose.
-
-## Requirements
-
-### Requirement: A
-The system SHALL do A.
-
-#### Scenario: A works
-- **WHEN** foo
-- **THEN** bar
-
-## Edge Cases
-
-### Requirement: B
-The system SHALL do B.
-
-#### Scenario: B works
-- **WHEN** baz
-- **THEN** qux`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), malformedMain);
-
-      const deltaContent = `# Delta Target Changes
-
-## MODIFIED Requirements
-
-### Requirement: B
-The system SHALL do B differently.
-
-#### Scenario: B changes
-- **WHEN** baz changes
-- **THEN** qux changes`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), deltaContent);
+    it('should abort with a clear error when the target spec is not valid Gherkin', async () => {
+      const changeName = 'broken-target';
+      const malformedMain = [
+        'Feature: delta-target',
+        '  Delta target purpose.',
+        '',
+        '  @REQ-0001',
+        '  Rule: A',
+        '    The system SHALL do A.',
+        '',
+        '    Scenario: A works',
+        '      When foo',
+        '      Then bar',
+        '',
+        'Feature: a second feature',
+        '',
+      ].join('\n');
+      await put(mainSpecFile('delta-target'), malformedMain);
+      await put(
+        deltaFile(changeName, 'delta-target'),
+        delta('Delta Target', { id: 'REQ-0001', tags: ['modified'], name: 'A', statement: 'The system SHALL do A differently.' })
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('delta-target: target spec is structurally invalid and cannot be updated until fixed:')
-      );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Requirement header "### Requirement: B" appears outside the main ## Requirements section.')
+        expect.stringContaining('delta-target: target spec is invalid and cannot be updated until fixed (line 12:')
       );
       expect(console.log).toHaveBeenCalledWith('Aborted. No files were changed.');
-
-      const still = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(still).toBe(malformedMain);
-
-      const archiveDir = path.join(tempDir, 'openspec', 'changes', 'archive');
-      const archives = await fs.readdir(archiveDir);
-      expect(archives.some(a => a.includes(changeName))).toBe(false);
-    });
-
-    it('should require MODIFIED to reference the NEW header when a rename exists (error format)', async () => {
-      const changeName = 'rename-modify-new-header';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const changeSpecDir = path.join(changeDir, 'specs', 'delta');
-      await fs.mkdir(changeSpecDir, { recursive: true });
-
-      // Main spec with Old
-      const mainSpecDir = path.join(tempDir, 'openspec', 'specs', 'delta');
-      await fs.mkdir(mainSpecDir, { recursive: true });
-      const mainContent = `# delta Specification
-
-## Purpose
-Delta purpose.
-
-## Requirements
-
-### Requirement: Old
-old body`;
-      await fs.writeFile(path.join(mainSpecDir, 'spec.md'), mainContent);
-
-      // Delta: rename Old->New, but MODIFIED references Old (should abort)
-      const badDelta = `# Delta - Changes
-
-## RENAMED Requirements
-- FROM: \`### Requirement: Old\`
-- TO: \`### Requirement: New\`
-
-## MODIFIED Requirements
-### Requirement: Old
-new body`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), badDelta);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-      const unchanged = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(unchanged).toBe(mainContent);
-      // Assert error message format and abort notice
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('delta validation failed')
-      );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Aborted. No files were changed.')
-      );
-
-      // Fix MODIFIED to reference New (should succeed)
-      const goodDelta = `# Delta - Changes
-
-## RENAMED Requirements
-- FROM: \`### Requirement: Old\`
-- TO: \`### Requirement: New\`
-
-## MODIFIED Requirements
-### Requirement: New
-new body`;
-      await fs.writeFile(path.join(changeSpecDir, 'spec.md'), goodDelta);
-
-      await archiveCommand.execute(changeName, { yes: true, noValidate: true });
-      const updated = await fs.readFile(path.join(mainSpecDir, 'spec.md'), 'utf-8');
-      expect(updated).toContain('### Requirement: New');
-      expect(updated).toContain('new body');
-      expect(updated).not.toContain('### Requirement: Old');
+      await expect(fs.readFile(mainSpecFile('delta-target'), 'utf-8')).resolves.toBe(malformedMain);
+      expect((await archivedNames()).some(a => a.includes(changeName))).toBe(false);
     });
 
     it('should process multiple specs atomically (any failure aborts all)', async () => {
       const changeName = 'multi-spec-atomic';
       const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const spec1Dir = path.join(changeDir, 'specs', 'epsilon');
-      const spec2Dir = path.join(changeDir, 'specs', 'zeta');
-      await fs.mkdir(spec1Dir, { recursive: true });
-      await fs.mkdir(spec2Dir, { recursive: true });
+      const epsilonMain = await put(
+        mainSpecFile('epsilon'),
+        featureSpec('epsilon', 'Epsilon purpose.', [{ id: 'REQ-0001', name: 'E1', statement: 'e1' }])
+      );
+      const zetaMain = await put(
+        mainSpecFile('zeta'),
+        featureSpec('zeta', 'Zeta purpose.', [{ id: 'REQ-0002', name: 'Z1', statement: 'z1' }])
+      );
 
-      // Existing main specs
-      const epsilonMain = path.join(tempDir, 'openspec', 'specs', 'epsilon', 'spec.md');
-      await fs.mkdir(path.dirname(epsilonMain), { recursive: true });
-      await fs.writeFile(epsilonMain, `# epsilon Specification
-
-## Purpose
-Epsilon purpose.
-
-## Requirements
-
-### Requirement: E1
-e1`);
-
-      const zetaMain = path.join(tempDir, 'openspec', 'specs', 'zeta', 'spec.md');
-      await fs.mkdir(path.dirname(zetaMain), { recursive: true });
-      await fs.writeFile(zetaMain, `# zeta Specification
-
-## Purpose
-Zeta purpose.
-
-## Requirements
-
-### Requirement: Z1
-z1`);
-
-      // Delta: epsilon is valid modification; zeta tries to modify non-existent -> should abort both
-      await fs.writeFile(path.join(spec1Dir, 'spec.md'), `# Epsilon - Changes
-
-## MODIFIED Requirements
-### Requirement: E1
-E1 updated`);
-
-      await fs.writeFile(path.join(spec2Dir, 'spec.md'), `# Zeta - Changes
-
-## MODIFIED Requirements
-### Requirement: Missing
-missing body`);
+      // epsilon is a valid modification; zeta modifies a missing ID -> both abort
+      await put(
+        deltaFile(changeName, 'epsilon'),
+        delta('Epsilon', { id: 'REQ-0001', tags: ['modified'], name: 'E1', statement: 'E1 updated' })
+      );
+      await put(
+        deltaFile(changeName, 'zeta'),
+        delta('Zeta', { id: 'REQ-0009', tags: ['modified'], name: 'Missing', statement: 'missing body' })
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
       const e1 = await fs.readFile(epsilonMain, 'utf-8');
       const z1 = await fs.readFile(zetaMain, 'utf-8');
-      expect(e1).toContain('### Requirement: E1');
+      expect(e1).toContain('Rule: E1');
       expect(e1).not.toContain('E1 updated');
-      expect(z1).toContain('### Requirement: Z1');
-      // changeDir should still exist
+      expect(z1).toContain('Rule: Z1');
+      // The change directory still exists
       await expect(fs.access(changeDir)).resolves.not.toThrow();
     });
 
     it('should display aggregated totals across multiple specs', async () => {
       const changeName = 'multi-spec-totals';
-      const changeDir = path.join(tempDir, 'openspec', 'changes', changeName);
-      const spec1Dir = path.join(changeDir, 'specs', 'omega');
-      const spec2Dir = path.join(changeDir, 'specs', 'psi');
-      await fs.mkdir(spec1Dir, { recursive: true });
-      await fs.mkdir(spec2Dir, { recursive: true });
+      await put(mainSpecFile('omega'), featureSpec('omega', 'Omega purpose.', [{ id: 'REQ-0001', name: 'O1', statement: 'o1' }]));
+      await put(mainSpecFile('psi'), featureSpec('psi', 'Psi purpose.', [{ id: 'REQ-0002', name: 'P1', statement: 'p1' }]));
 
-      // Existing main specs
-      const omegaMain = path.join(tempDir, 'openspec', 'specs', 'omega', 'spec.md');
-      await fs.mkdir(path.dirname(omegaMain), { recursive: true });
-      await fs.writeFile(omegaMain, `# omega Specification\n\n## Purpose\nOmega purpose.\n\n## Requirements\n\n### Requirement: O1\no1`);
-
-      const psiMain = path.join(tempDir, 'openspec', 'specs', 'psi', 'spec.md');
-      await fs.mkdir(path.dirname(psiMain), { recursive: true });
-      await fs.writeFile(psiMain, `# psi Specification\n\n## Purpose\nPsi purpose.\n\n## Requirements\n\n### Requirement: P1\np1`);
-
-      // Deltas: omega add one, psi rename and modify -> totals: +1, ~1, -0, →1
-      await fs.writeFile(path.join(spec1Dir, 'spec.md'), `# Omega - Changes\n\n## ADDED Requirements\n\n### Requirement: O2\nnew`);
-      await fs.writeFile(path.join(spec2Dir, 'spec.md'), `# Psi - Changes\n\n## RENAMED Requirements\n- FROM: \`### Requirement: P1\`\n- TO: \`### Requirement: P2\`\n\n## MODIFIED Requirements\n### Requirement: P2\nupdated`);
+      // omega adds one; psi renames and modifies one -> totals: +1, ~1, -0
+      await put(
+        deltaFile(changeName, 'omega'),
+        delta('Omega', { id: 'REQ-0003', tags: ['added'], name: 'O2', statement: 'new' })
+      );
+      await put(
+        deltaFile(changeName, 'psi'),
+        delta('Psi', { id: 'REQ-0002', tags: ['modified'], name: 'P2', statement: 'updated' })
+      );
 
       await archiveCommand.execute(changeName, { yes: true, noValidate: true });
 
-      // Verify aggregated totals line was printed
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Totals: + 1, ~ 1, - 0, → 1')
+        expect.stringContaining('Totals: + 1, ~ 1, - 0, → 0')
       );
     });
   });
