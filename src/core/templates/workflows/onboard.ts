@@ -364,26 +364,31 @@ Here's the spec:
 
 ---
 
-# Spec Delta
+Feature: <Capability name>
 
-## ADDED Requirements
+  @added
+  Rule: <Name>
+    <Description of what the system should do, with SHALL or MUST>
 
-### Requirement: <Name>
-
-<Description of what the system should do>
-
-#### Scenario: <Scenario name>
-
-- **WHEN** <trigger condition>
-- **THEN** <expected outcome>
-- **AND** <additional outcome if needed>
+    Scenario: <Scenario name>
+      Given <starting state>
+      When <trigger condition>
+      Then <expected outcome>
+      And <additional outcome if needed>
 
 ---
 
-This format—WHEN/THEN/AND—makes requirements testable. You can literally read them as test cases.
+This is Gherkin. Each Rule is one requirement, and the Given/When/Then
+steps make it testable: you can literally read each scenario as a test case.
+\`@added\` marks a new requirement. OpenSpec gives it a stable ID such as
+\`@REQ-0042\`, and code that implements it points back to that ID.
 \`\`\`
 
-Save to the concrete file path chosen from \`resolvedOutputPath\`.
+Save to the concrete file path chosen from \`resolvedOutputPath\`. Then give the new requirement its ID:
+
+\`\`\`bash
+openspec ids assign "<name>"
+\`\`\`
 
 ---
 

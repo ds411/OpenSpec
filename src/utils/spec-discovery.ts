@@ -2,7 +2,6 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { assertDiscoveredSpecFile } from './spec-path-containment.js';
 import { parseDeltaSpec } from '../core/parsers/requirement-blocks.js';
-import { parseFeature } from '../core/gherkin/document.js';
 
 /** The file that holds a capability's spec, in main specs and in change deltas. */
 export const SPEC_FILE_NAME = 'spec.feature';
@@ -121,8 +120,10 @@ export async function findUnreadDeltaFiles(specsRoot: string): Promise<UnreadDel
         if (err?.code === 'ENOENT') continue;
         throw err;
       }
+      // Loaded here, not at the top: tab completion discovers specs and must
+      // not pay for the Gherkin parser.
       const carriesDeltas = isFeature
-        ? parseFeature(content).rules.length > 0
+        ? (await import('../core/gherkin/document.js')).parseFeature(content).rules.length > 0
         : Object.values(parseDeltaSpec(content).sectionPresence).some(Boolean);
       if (!carriesDeltas) continue;
       const extension = isFeature ? '.feature' : '.md';

@@ -18,10 +18,10 @@ importers:
   .:
     dependencies:
       '@cucumber/gherkin':
-        specifier: 42.0.1
+        specifier: ^42.0.1
         version: 42.0.1
       '@cucumber/messages':
-        specifier: 34.2.1
+        specifier: ^34.2.1
         version: 34.2.1
       '@inquirer/core':
         specifier: ^12.0.0

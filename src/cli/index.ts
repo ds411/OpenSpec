@@ -10,6 +10,8 @@ import { registerConfigCommand } from './commands/config.js';
 import { registerSchemaCommand } from './commands/schema.js';
 import { registerStoreCommand } from './commands/store.js';
 import { registerDoctorCommand } from './commands/doctor.js';
+import { registerIdsCommand } from './commands/ids.js';
+import { registerConvertSpecsCommand } from './commands/convert-specs.js';
 import { registerContextCommand } from './commands/context.js';
 import { registerWorksetCommand } from './commands/workset.js';
 import { DEFAULT_SCHEMA } from '../commands/workflow/default-schema.js';
@@ -578,6 +580,8 @@ registerConfigCommand(program);
 registerSchemaCommand(program);
 registerStoreCommand(program);
 registerDoctorCommand(program);
+registerIdsCommand(program);
+registerConvertSpecsCommand(program);
 registerContextCommand(program);
 registerWorksetCommand(program);
 
@@ -622,7 +626,7 @@ program
   // spec-only flags
   .option('--requirements', 'JSON only: Show only requirements (exclude scenarios)')
   .option('--no-scenarios', 'JSON only: Exclude scenario content')
-  .option('-r, --requirement <id>', 'JSON only: Show specific requirement by ID (1-based)')
+  .option('-r, --requirement <id>', 'JSON only: Show one requirement by its ID (REQ-0001) or 1-based position')
   .option('--store <id>', STORE_OPTION_DESCRIPTION)
   // Explicit registration required: allowUnknownOption would otherwise
   // silently swallow --store-path instead of rejecting it deliberately.

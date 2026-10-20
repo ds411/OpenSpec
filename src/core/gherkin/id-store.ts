@@ -154,6 +154,26 @@ export async function nextIdNumber(openspecDir: string): Promise<number> {
   return Math.max(counter, highest + 1, 1);
 }
 
+/**
+ * Run `use` with the first free ID number. It returns how many numbers it
+ * used, and the counter moves past them. The counter is locked for the whole
+ * run, so `use` can write files that carry the new IDs before another run
+ * reads the counter. A dry run takes no lock and leaves the counter alone.
+ */
+export async function withNextIdNumber<T>(
+  openspecDir: string,
+  use: (first: number) => Promise<{ used: number; result: T }>,
+  options: { dryRun?: boolean } = {}
+): Promise<T> {
+  const run = async () => {
+    const first = await nextIdNumber(openspecDir);
+    const { used, result } = await use(first);
+    if (!options.dryRun && used > 0) await writeIdCounter(openspecDir, first + used);
+    return result;
+  };
+  return options.dryRun ? run() : withCounterLock(openspecDir, run);
+}
+
 /** Take `count` new IDs and move the counter past them. */
 export async function reserveIds(openspecDir: string, count: number): Promise<string[]> {
   if (!Number.isSafeInteger(count) || count < 1) {
@@ -208,6 +228,14 @@ export async function assignMissingIds(
             file,
             line: rule.keywordLine,
             message: `Rule "${rule.name}" has more than one ID (${rule.ids.join(', ')}). Keep one.`,
+          });
+        } else if (rule.ids.length === 0 && (rule.operations.includes('modified') || rule.operations.includes('removed'))) {
+          // A fresh ID would point the entry at a requirement that does not
+          // exist; it needs the ID of the requirement it changes.
+          problems.push({
+            file,
+            line: rule.keywordLine,
+            message: `Rule "${rule.name}" is @${rule.operations.includes('modified') ? 'modified' : 'removed'} but has no ID. Copy the ID of the requirement it changes from the main spec.`,
           });
         } else if (rule.ids.length === 0) {
           missing.push(rule);

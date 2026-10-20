@@ -1411,17 +1411,16 @@ function createDefaultTemplate(artifactId: string): string {
 `;
 
     case 'specs':
-      return `# Spec Delta
+      return `Feature: Example capability
+  What this capability is for (new capabilities only).
 
-## ADDED Requirements
+  @added
+  Rule: Example requirement
+    The system SHALL do something observable.
 
-### Requirement: Example requirement
-
-Description of the requirement.
-
-#### Scenario: Example scenario
-- **WHEN** some condition
-- **THEN** some outcome
+    Scenario: Example scenario
+      When some condition
+      Then some outcome
 `;
 
     case 'design':

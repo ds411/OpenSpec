@@ -24,6 +24,7 @@ import {
   pruneEmptyDirs,
   type SpecUpdate,
 } from './specs-apply.js';
+import { hasDeltaOperations, parseDeltaFeature } from './gherkin/delta.js';
 import { discoverSpecFiles, findUnreadDeltaFiles, hasAnyFileUnder } from '../utils/spec-discovery.js';
 import {
   METADATA_FILENAME,
@@ -62,12 +63,8 @@ const ARCHIVE_DATE_PREFIX_PATTERN = /^\d{4}-\d{2}-\d{2}-/;
  * (#1302); anything else means the spec is broken in a way the author still has
  * to fix, so archive must abort exactly as it always did instead of retiring.
  *
- * Asking the validator - rather than counting requirement blocks a second time -
- * is what makes "this spec could not have been written anyway" true by
- * construction. The two counts genuinely disagree: `MarkdownParser` accepts any
- * `###` heading under `## Requirements` as a requirement, while the delta block
- * parser only indexes canonical `### Requirement:` headers and sweeps the rest
- * into the preamble, which survives into the rebuilt spec.
+ * Asking the validator - rather than counting rules a second time - is what
+ * makes "this spec could not have been written anyway" true by construction.
  */
 export async function isRetirableSpec(specName: string, rebuilt: string): Promise<boolean> {
   const report = await new Validator().validateSpecContent(specName, rebuilt);
@@ -144,13 +141,7 @@ async function decideSpecOutcome(
   if (!retirementDeclared) return 'write';
 
   // Retirement is decided by the validator, never by a second opinion about
-  // what counts as a requirement: the block parser sweeps some shapes the
-  // validator accepts into the preamble, so "no blocks left" alone would retire
-  // specs that validate fine.
-  //
-  // Residual `###` headings veto it outright. The validator can be talked out of
-  // seeing them - a stray `### Requirements` under Purpose captures its section
-  // lookup - but a reader cannot, and deleting the file would take them with it.
+  // what counts as a requirement.
   //
   // Under --no-validate there is no verdict to lean on, so nothing is retired:
   // the author opted out of the check that makes this safe, and the old
@@ -1534,9 +1525,9 @@ export class ArchiveCommand {
       for (const { specFile } of hasDeltaSpecs ? [] : await discoverSpecFiles(changeSpecsDir)) {
         try {
           const content = await fs.readFile(specFile, 'utf-8');
-          // Case-insensitive to match the delta parser, so a lowercase header
-          // routes through the same delta validation that validate runs.
-          if (/^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements/im.test(content)) {
+          // Any rule with an operation tag routes through the same delta
+          // validation that validate runs.
+          if (hasDeltaOperations(parseDeltaFeature(content))) {
             hasDeltaSpecs = true;
             break;
           }
@@ -1920,7 +1911,7 @@ export class ArchiveCommand {
                       `archive does instead, and it is refused while the spec holds content the ` +
                       `merge cannot safely account for and deleting the file would take with it: ` +
                       `${describeUnaccountedContent(p.unaccountedContent)}. ` +
-                      'Move it into `## Purpose` or a canonical requirement, or delete the spec by hand, then rerun.' +
+                      'Move it into the feature description or into a rule, or delete the spec by hand, then rerun.' +
                       // Said here too, because an author looking at a marker they
                       // believe authorises the deletion should not have to clear
                       // the content first to find out it was never read.
@@ -1941,7 +1932,7 @@ export class ArchiveCommand {
                     ? `'${specName}' declares retire_capabilities, but the spec holds content the merge ` +
                       `cannot safely account for and deleting the file would take with it: ` +
                       `${describeUnaccountedContent(p.unaccountedContent)}. ` +
-                      'Move it into `## Purpose` or a canonical requirement, or delete the spec by hand.'
+                      'Move it into the feature description or into a rule, or delete the spec by hand.'
                     : undefined;
                 if (json) {
                   throw new ArchiveBlockedError(

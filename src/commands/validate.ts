@@ -397,12 +397,13 @@ export class ValidateCommand {
       bullets.push('- Fix .openspec.yaml so the skip_specs marker can be honored (schema: <name> naming a known schema is required)');
       bullets.push('- Or remove skip_specs from .openspec.yaml and add delta specs instead');
     } else if (type === 'change') {
-      bullets.push('- Ensure change has deltas in specs/: use headers ## ADDED/MODIFIED/REMOVED/RENAMED Requirements');
-      bullets.push('- Each requirement MUST include at least one #### Scenario: block');
+      bullets.push('- Ensure change has deltas in specs/<capability>/spec.feature: Gherkin rules tagged @added, @modified or @removed');
+      bullets.push('- Each @added or @modified rule MUST include at least one Scenario: with steps');
+      bullets.push(`- Give rules without an ID their ID: ${withStoreFlag(root, `openspec ids assign ${id}`)}`);
       bullets.push(`- Debug parsed deltas: ${withStoreFlag(root, `openspec show ${id} --json --deltas-only`)}`);
     } else {
-      bullets.push('- Ensure spec includes ## Purpose and ## Requirements sections');
-      bullets.push('- Each requirement MUST include at least one #### Scenario: block');
+      bullets.push('- Ensure the spec is a Gherkin feature: a Feature: line, a description (the Purpose), and one Rule: per requirement');
+      bullets.push('- Each Rule MUST carry an ID tag such as @REQ-0001 and include at least one Scenario: with steps');
       bullets.push('- Re-run with --json to see structured report');
     }
     console.error('Next steps:');

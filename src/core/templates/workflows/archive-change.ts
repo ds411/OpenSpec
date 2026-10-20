@@ -129,13 +129,13 @@ ${PROJECT_ROOT_GUARD}
    delta specs from other artifacts.
 
    **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at \`<planningHome.root>/openspec/specs/<capability-path>/spec.md\` (use the store-aware \`planningHome.root\` from step 2, not a hardcoded repo path)
+   - Compare each delta spec with its corresponding main spec at \`<planningHome.root>/openspec/specs/<capability-path>/spec.feature\` (use the store-aware \`planningHome.root\` from step 2, not a hardcoded repo path)
    - A missing main spec is **not automatically** "already synced". For a new capability, the main spec is an *output* of the sync, not an input:
-     - If the delta has MODIFIED or RENAMED requirements, report that only ADDED requirements can create a new main spec and mark that capability as sync-blocked. Never invent a requirement that has no current version.
-     - Otherwise, if the delta has only REMOVED requirements and the change's \`.openspec.yaml\` declares \`retire_capabilities: true\`, the capability is already retired: count it as already synced, warn that there is nothing left to remove, and do not recreate the main spec. Apply this rule both now and when verifying a completed sync.
-     - Otherwise, if the delta has no ADDED requirements, report that no sync is possible and mark that capability as sync-blocked. For a REMOVED-only delta, warn that there is no main spec to remove from and leave the main-spec tree unchanged. \`openspec archive\` refuses the unmarked REMOVED-only case with \`Spec must have at least one requirement\`.
-     - Otherwise, count the capability as needing sync and name it in the summary (\`<capability-path>: new main spec will be created\`). If the delta also has REMOVED requirements, warn that they will be ignored because there is no main spec to remove from. The sync creates the main spec from only the delta's ADDED requirements, exactly as \`openspec archive\` does.
-   - Determine what changes would be applied (adds, modifications, removals, renames)
+     - If the delta has \`@modified\` rules, report that only \`@added\` rules can create a new main spec and mark that capability as sync-blocked. Never invent a requirement that has no current version.
+     - Otherwise, if the delta has only \`@removed\` rules and the change's \`.openspec.yaml\` declares \`retire_capabilities: true\`, the capability is already retired: count it as already synced, warn that there is nothing left to remove, and do not recreate the main spec. Apply this rule both now and when verifying a completed sync.
+     - Otherwise, if the delta has no \`@added\` rules, report that no sync is possible and mark that capability as sync-blocked. For a \`@removed\`-only delta, warn that there is no main spec to remove from and leave the main-spec tree unchanged. \`openspec archive\` refuses the unmarked \`@removed\`-only case with \`Spec must have at least one requirement\`.
+     - Otherwise, count the capability as needing sync and name it in the summary (\`<capability-path>: new main spec will be created\`). If the delta also has \`@removed\` rules, warn that they will be ignored because there is no main spec to remove from. The sync creates the main spec from only the delta's \`@added\` rules, exactly as \`openspec archive\` does.
+   - Determine what changes would be applied (adds, modifications, removals, renames), matching each delta rule to the main spec by its requirement ID
    - Continue assessing the remaining capabilities even when one is sync-blocked. Show a combined summary before prompting.
 
    **Prompt options:**
@@ -165,17 +165,16 @@ ${PROJECT_ROOT_GUARD}
    Nothing has moved, so the user can fix the blocking condition or re-run the sync.
 
    After the sync writes each main spec, verify its structure against the canonical sync contract:
-   - A new main spec starts with a \`# <capability> Specification\` title. An existing main spec keeps its title exactly as it is.
-   - Preserve existing \`## Purpose\` sections completely untouched for established main specs.
-   - For a new main spec, copy the delta \`## Purpose\` verbatim. Warn only if the purpose text is shorter than standard validation expects. Do not regenerate or rewrite existing authored purpose. If no usable \`## Purpose\` is provided, use the existing TBD Purpose behavior and warning.
-   - Verify that no delta-style section headers (\`## ADDED Requirements\`, \`## MODIFIED Requirements\`, \`## REMOVED Requirements\`, \`## RENAMED Requirements\`) remain in the main spec, adhering strictly to the sync workflow formatting rules.
-   - Requirement blocks the sync wrote or changed use \`### Requirement:\` headings, and their scenarios use \`#### Scenario:\` headings, under the spec's \`## Requirements\` section. Leave content the delta does not mention exactly as it is.
+   - A new main spec starts with the delta's \`Feature:\` line. An existing main spec keeps its \`Feature:\` line exactly as it is.
+   - Preserve the feature description (the Purpose) of an established main spec completely untouched.
+   - For a new main spec, copy the delta's feature description verbatim. Warn only if the purpose text is shorter than standard validation expects. Do not regenerate or rewrite existing authored purpose. If the delta has no usable feature description, use the existing TBD Purpose behavior and warning.
+   - Verify that no operation tag (\`@added\`, \`@modified\`, \`@removed\`) remains in the main spec, adhering strictly to the sync workflow formatting rules.
+   - Each rule the sync wrote or changed keeps exactly one requirement ID tag, the same ID as in the delta, and its scenarios sit inside it. Leave content the delta does not mention exactly as it is.
 
    Then re-run the comparison from the top of this step, including the explicitly retired, missing-spec case, against every capability that has a delta spec in \`artifactPaths.specs.existingOutputPaths\` — not only the ones the sync reports it touched. A successful sync leaves nothing left to apply, so each capability must now read as already synced:
-   - ADDED requirements present
-   - MODIFIED requirements carrying the scenario and description changes named in the delta, with their other scenarios intact
-   - REMOVED requirements gone — and where this sync retired a capability (removed its last requirement, leaving \`## Requirements\` empty), its main spec deleted rather than left empty.
-   - RENAMED requirements present under the new name and absent under the old one
+   - \`@added\` requirements present under their IDs
+   - \`@modified\` requirements carrying the name, statement and scenario changes named in the delta, with their other scenarios intact
+   - \`@removed\` requirements gone — and where this sync retired a capability (removed its last rule), its main spec deleted rather than left empty.
 
    If the sync failed, or any capability does not match, report what differs and stop — do not archive. Nothing has moved and \`changeRoot\` is intact, so the user can fix the mismatch or re-run the sync and start the archive again.
 
@@ -341,13 +340,13 @@ ${PROJECT_ROOT_GUARD}
    delta specs from other artifacts.
 
    **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at \`<planningHome.root>/openspec/specs/<capability-path>/spec.md\` (use the store-aware \`planningHome.root\` from step 2, not a hardcoded repo path)
+   - Compare each delta spec with its corresponding main spec at \`<planningHome.root>/openspec/specs/<capability-path>/spec.feature\` (use the store-aware \`planningHome.root\` from step 2, not a hardcoded repo path)
    - A missing main spec is **not automatically** "already synced". For a new capability, the main spec is an *output* of the sync, not an input:
-     - If the delta has MODIFIED or RENAMED requirements, report that only ADDED requirements can create a new main spec and mark that capability as sync-blocked. Never invent a requirement that has no current version.
-     - Otherwise, if the delta has only REMOVED requirements and the change's \`.openspec.yaml\` declares \`retire_capabilities: true\`, the capability is already retired: count it as already synced, warn that there is nothing left to remove, and do not recreate the main spec. Apply this rule both now and when verifying a completed sync.
-     - Otherwise, if the delta has no ADDED requirements, report that no sync is possible and mark that capability as sync-blocked. For a REMOVED-only delta, warn that there is no main spec to remove from and leave the main-spec tree unchanged. \`openspec archive\` refuses the unmarked REMOVED-only case with \`Spec must have at least one requirement\`.
-     - Otherwise, count the capability as needing sync and name it in the summary (\`<capability-path>: new main spec will be created\`). If the delta also has REMOVED requirements, warn that they will be ignored because there is no main spec to remove from. The sync creates the main spec from only the delta's ADDED requirements, exactly as \`openspec archive\` does.
-   - Determine what changes would be applied (adds, modifications, removals, renames)
+     - If the delta has \`@modified\` rules, report that only \`@added\` rules can create a new main spec and mark that capability as sync-blocked. Never invent a requirement that has no current version.
+     - Otherwise, if the delta has only \`@removed\` rules and the change's \`.openspec.yaml\` declares \`retire_capabilities: true\`, the capability is already retired: count it as already synced, warn that there is nothing left to remove, and do not recreate the main spec. Apply this rule both now and when verifying a completed sync.
+     - Otherwise, if the delta has no \`@added\` rules, report that no sync is possible and mark that capability as sync-blocked. For a \`@removed\`-only delta, warn that there is no main spec to remove from and leave the main-spec tree unchanged. \`openspec archive\` refuses the unmarked \`@removed\`-only case with \`Spec must have at least one requirement\`.
+     - Otherwise, count the capability as needing sync and name it in the summary (\`<capability-path>: new main spec will be created\`). If the delta also has \`@removed\` rules, warn that they will be ignored because there is no main spec to remove from. The sync creates the main spec from only the delta's \`@added\` rules, exactly as \`openspec archive\` does.
+   - Determine what changes would be applied (adds, modifications, removals, renames), matching each delta rule to the main spec by its requirement ID
    - Continue assessing the remaining capabilities even when one is sync-blocked. Show a combined summary before prompting.
 
    **Prompt options:**
@@ -377,17 +376,16 @@ ${PROJECT_ROOT_GUARD}
    Nothing has moved, so the user can fix the blocking condition or re-run the sync.
 
    After the sync writes each main spec, verify its structure against the canonical sync contract:
-   - A new main spec starts with a \`# <capability> Specification\` title. An existing main spec keeps its title exactly as it is.
-   - Preserve existing \`## Purpose\` sections completely untouched for established main specs.
-   - For a new main spec, copy the delta \`## Purpose\` verbatim. Warn only if the purpose text is shorter than standard validation expects. Do not regenerate or rewrite existing authored purpose. If no usable \`## Purpose\` is provided, use the existing TBD Purpose behavior and warning.
-   - Verify that no delta-style section headers (\`## ADDED Requirements\`, \`## MODIFIED Requirements\`, \`## REMOVED Requirements\`, \`## RENAMED Requirements\`) remain in the main spec, adhering strictly to the sync workflow formatting rules.
-   - Requirement blocks the sync wrote or changed use \`### Requirement:\` headings, and their scenarios use \`#### Scenario:\` headings, under the spec's \`## Requirements\` section. Leave content the delta does not mention exactly as it is.
+   - A new main spec starts with the delta's \`Feature:\` line. An existing main spec keeps its \`Feature:\` line exactly as it is.
+   - Preserve the feature description (the Purpose) of an established main spec completely untouched.
+   - For a new main spec, copy the delta's feature description verbatim. Warn only if the purpose text is shorter than standard validation expects. Do not regenerate or rewrite existing authored purpose. If the delta has no usable feature description, use the existing TBD Purpose behavior and warning.
+   - Verify that no operation tag (\`@added\`, \`@modified\`, \`@removed\`) remains in the main spec, adhering strictly to the sync workflow formatting rules.
+   - Each rule the sync wrote or changed keeps exactly one requirement ID tag, the same ID as in the delta, and its scenarios sit inside it. Leave content the delta does not mention exactly as it is.
 
    Then re-run the comparison from the top of this step, including the explicitly retired, missing-spec case, against every capability that has a delta spec in \`artifactPaths.specs.existingOutputPaths\` — not only the ones the sync reports it touched. A successful sync leaves nothing left to apply, so each capability must now read as already synced:
-   - ADDED requirements present
-   - MODIFIED requirements carrying the scenario and description changes named in the delta, with their other scenarios intact
-   - REMOVED requirements gone — and where this sync retired a capability (removed its last requirement, leaving \`## Requirements\` empty), its main spec deleted rather than left empty.
-   - RENAMED requirements present under the new name and absent under the old one
+   - \`@added\` requirements present under their IDs
+   - \`@modified\` requirements carrying the name, statement and scenario changes named in the delta, with their other scenarios intact
+   - \`@removed\` requirements gone — and where this sync retired a capability (removed its last rule), its main spec deleted rather than left empty.
 
    If the sync failed, or any capability does not match, report what differs and stop — do not archive. Nothing has moved and \`changeRoot\` is intact, so the user can fix the mismatch or re-run the sync and start the archive again.
 

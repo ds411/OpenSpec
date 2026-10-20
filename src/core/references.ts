@@ -205,7 +205,7 @@ const ENVELOPE_TAG = new RegExp(
  *
  * Deliberately narrow: only this fixed vocabulary is touched. Escaping every
  * angle bracket also works, but it mangles ordinary content for everyone.
- * OpenSpec's own spec-driven schema writes `### Requirement: <name>` and
+ * OpenSpec's own spec-driven schema writes `Rule: <name>` and
  * `openspec show "<spec-id>"`; custom templates carry `<details>`; and
  * `context:` routinely holds `R&D`, `pnpm build && pnpm test` or
  * `Result<T, E>`. All of those would reach the agent entity-encoded - a real

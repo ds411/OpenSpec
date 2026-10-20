@@ -9,9 +9,22 @@ import { parseFeature, type FeatureDocument, type SpecRule, type SpecScenario } 
 export const SPEC_SYNTAX_ERROR_PREFIX = 'Gherkin syntax error';
 export const SPEC_MISSING_FEATURE = 'Spec must have a "Feature:" line';
 
-/** A scenario's steps as plain text, one `Keyword text` line per step. */
+/**
+ * A scenario's steps as plain text, one `Keyword text` line per step, with a
+ * step's doc string or data table indented below it.
+ */
 export function scenarioText(scenario: SpecScenario): string {
-  return scenario.steps.map((step) => `${step.keyword} ${step.text}`.trim()).join('\n');
+  return scenario.steps
+    .map((step) => {
+      const line = `${step.keyword} ${step.text}`.trim();
+      if (step.argument === undefined) return line;
+      const argument = step.argument
+        .split('\n')
+        .map((row) => `  ${row}`)
+        .join('\n');
+      return `${line}\n${argument}`;
+    })
+    .join('\n');
 }
 
 export function ruleToRequirement(rule: SpecRule): Requirement {

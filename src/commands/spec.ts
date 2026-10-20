@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import path, { join } from 'path';
 import { parseSpecContent } from '../core/gherkin/spec-model.js';
+import { isRequirementId } from '../core/gherkin/ids.js';
 import { Validator } from '../core/validation/validator.js';
 import type { Spec } from '../core/schemas/index.js';
 import type { RootOutput } from '../core/root-selection.js';
@@ -42,6 +43,11 @@ function parseSpecFromFile(specsDir: string, specPath: string, specId: string): 
 
 function validateRequirementIndex(spec: Spec, requirementOpt?: string): number | undefined {
   if (!requirementOpt) return undefined;
+  if (isRequirementId(requirementOpt)) {
+    const byId = spec.requirements.findIndex((requirement) => requirement.id === requirementOpt);
+    if (byId === -1) throw new Error(`Requirement ${requirementOpt} not found`);
+    return byId;
+  }
   const index = Number.parseInt(requirementOpt, 10);
   if (!Number.isInteger(index) || index < 1 || index > spec.requirements.length) {
     throw new Error(`Requirement ${requirementOpt} not found`);
@@ -57,6 +63,7 @@ function filterSpec(spec: Spec, options: ShowOptions): Spec {
     ? [spec.requirements[requirementIndex]]
     : spec.requirements
   ).map(req => ({
+    ...(req.id ? { id: req.id } : {}),
     name: req.name,
     text: req.text,
     scenarios: includeScenarios ? req.scenarios : [],

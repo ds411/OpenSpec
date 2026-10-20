@@ -32,6 +32,8 @@ export interface SpecStep {
   /** Context, Action, Outcome, Conjunction or Unknown, as the parser classifies it. */
   keywordType: string;
   text: string;
+  /** A doc string's content, or a data table as `| a | b |` rows. */
+  argument?: string;
   line: number;
 }
 
@@ -194,11 +196,22 @@ function toScenario(scenario: messages.Scenario): SpecScenario {
       keyword: step.keyword.trim(),
       keywordType: step.keywordType ?? 'Unknown',
       text: step.text,
+      ...(stepArgument(step) !== undefined ? { argument: stepArgument(step) } : {}),
       line: step.location.line,
     })),
     examples: scenario.examples.length,
     line: scenario.location.line,
   };
+}
+
+function stepArgument(step: messages.Step): string | undefined {
+  if (step.docString) return step.docString.content;
+  if (step.dataTable) {
+    return step.dataTable.rows
+      .map((row) => `| ${row.cells.map((cell) => cell.value).join(' | ')} |`)
+      .join('\n');
+  }
+  return undefined;
 }
 
 function toRule(rule: messages.Rule, startLine: number, endLine: number): SpecRule {
