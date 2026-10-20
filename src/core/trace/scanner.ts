@@ -2,9 +2,10 @@
  * The @trace scanner.
  *
  * Code points back at a requirement with the word `@trace` and one or more
- * requirement IDs, anywhere on a line: `// @trace REQ-0001`,
- * `# @trace REQ-0001, REQ-0002`, `<!-- @trace REQ-0003 -->`. The scanner does
- * not parse comment syntax, so a trace works the same in every language.
+ * requirement IDs, anywhere on a line, in any comment style (`//`, `#`, `--`,
+ * `/* *\/`, `<!-- -->`). The scanner does not parse comment syntax, so a
+ * trace works the same in every language. (The examples in this file write
+ * the ID as `REQ-…`, so that the scanner does not read them as traces.)
  *
  * Which files count: in a git work tree, the files git tracks plus new files
  * that `.gitignore` does not exclude. Outside git, a walk of the folder that
@@ -74,10 +75,11 @@ const GIT_LIST_OPTIONS = {
 /**
  * `@trace` at a word start, then one or more IDs separated by commas or
  * spaces. An ID token is `REQ-` and digits; a token with fewer than four
- * digits is kept, so that `@trace REQ-12` shows up as a trace to an ID that
- * does not exist instead of being skipped in silence. `@trace` with no ID
- * after it (prose about the feature) is not a trace.
+ * digits is kept, so that a short ID shows up as a trace to an ID that does
+ * not exist instead of being skipped in silence. `@trace` with no ID after it
+ * (prose about the feature, `@trace <ID>` in a template) is not a trace.
  */
+// @trace REQ-0361
 const TRACE_PATTERN = /(?<![\w@])@trace(?::[ \t]*|[ \t]+)(REQ-\d+(?!\w)(?:(?:[ \t]*,[ \t]*|[ \t]+)REQ-\d+(?!\w))*)/g;
 const ID_TOKEN = /REQ-\d+/g;
 
@@ -120,6 +122,7 @@ export function isBinaryContent(content: Uint8Array): boolean {
  * Build the filter for `trace.include` and `trace.exclude`. A glob that ends
  * in `/` means everything under that folder.
  */
+// @trace REQ-0363
 export function createTracePathFilter(options: TraceScanOptions): (relativePath: string) => boolean {
   const compile = (globs: string[] | undefined) => {
     const list = (globs ?? []).map((glob) => (glob.endsWith('/') ? `${glob}**` : glob));
@@ -143,6 +146,7 @@ function isInOpenSpecDir(relativePath: string): boolean {
  * not ignored, relative to `root`. Undefined when `root` is not in a git work
  * tree or git is not installed.
  */
+// @trace REQ-0362
 export async function listGitFiles(root: string): Promise<string[] | undefined> {
   try {
     const { stdout } = await execFileAsync(
@@ -161,6 +165,7 @@ export async function listGitFiles(root: string): Promise<string[] | undefined> 
  * the folders in WALK_SKIPPED_DIRS at any depth and does not follow
  * symlinked folders, so a link loop cannot hang the scan.
  */
+// @trace REQ-0362
 export async function walkFiles(root: string): Promise<string[]> {
   const files: string[] = [];
   const skipped = new Set<string>(WALK_SKIPPED_DIRS);
@@ -192,6 +197,7 @@ export async function walkFiles(root: string): Promise<string[]> {
  * text file of a sensible size: a folder (git lists submodules and symlinks to
  * folders as paths), a deleted file git still tracks, a binary file.
  */
+// @trace REQ-0362
 async function readTextFile(absolutePath: string): Promise<string | undefined> {
   try {
     const stat = await fs.stat(absolutePath);
@@ -212,6 +218,7 @@ async function readTextFile(absolutePath: string): Promise<string | undefined> {
  * The files the scan reads, relative to `root` and sorted. Exported so that
  * tests and other commands can see the scope without reading the files.
  */
+// @trace REQ-0362, REQ-0368
 export async function listTraceFiles(
   root: string,
   options: TraceScanOptions = {}

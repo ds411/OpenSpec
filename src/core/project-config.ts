@@ -263,6 +263,7 @@ export const TRACE_GLOB_FIELDS = ['include', 'exclude'] as const;
  * `include`. Empty strings drop with a warning; a list that ends up empty
  * is left out.
  */
+// @trace REQ-0363
 function parseTraceConfig(raw: unknown): ProjectConfig['trace'] | undefined {
   if (raw === undefined) {
     return undefined;

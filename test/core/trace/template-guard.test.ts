@@ -7,9 +7,9 @@ import { getCommandTemplates, getSkillTemplates } from '../../../src/core/shared
 import { findTracesInText } from '../../../src/core/trace/scanner.js';
 
 // `openspec init` writes skills, commands and schema templates into the user's
-// repository, and git tracks them there. A trace example in any of them, such
-// as "// @trace REQ-0001", would then count as a real trace in every user
-// repository: an orphan, or a false trace to the user's own REQ-0001. The
+// repository, and git tracks them there. A "@trace" example with a real-looking
+// ID in any of them would count as a real trace in every user repository: an
+// orphan, or a false trace to one of the user's own requirements. The
 // templates must describe the syntax with a placeholder instead.
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');

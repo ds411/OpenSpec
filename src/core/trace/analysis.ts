@@ -93,6 +93,7 @@ function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+// @trace REQ-0364, REQ-0365
 export function analyzeTraces(index: RequirementIndex, traces: TraceHit[]): TraceAnalysis {
   const tracesById = new Map<string, TraceHit[]>();
   for (const hit of traces) {

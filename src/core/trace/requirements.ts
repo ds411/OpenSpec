@@ -80,6 +80,7 @@ function toRequirement(rule: SpecRule, id: string, capability: string, file: str
   };
 }
 
+// @trace REQ-0365
 function missingIdProblem(rule: SpecRule, file: string, change?: string): SpecProblem {
   const message =
     rule.ids.length === 0
