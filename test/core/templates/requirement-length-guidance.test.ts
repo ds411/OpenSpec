@@ -21,13 +21,14 @@ describe('specs instruction requirement length (#1976)', () => {
 
     expect(instruction).toContain(`${MAX_REQUIREMENT_TEXT_LENGTH} characters or fewer`);
     expect(instruction).toContain('split a requirement that covers several behaviors');
-    // Existing requirements under MODIFIED must be copied whole (scenario-loss
-    // validation rejects a split), and the limit is a warning that fails --strict.
+    // An existing requirement in a @modified rule must be copied whole
+    // (scenario-loss validation rejects a split), and the limit is a warning
+    // that fails --strict.
     expect(instruction).toContain('`openspec validate --strict` fails on it.');
-    expect(instruction).toContain('Under MODIFIED, keep the existing requirement block whole');
+    expect(instruction).toContain('In a `@modified` rule, keep the existing requirement whole');
     // Strict CI catches new requirements before archive, and an existing long
     // requirement has a split path that keeps every scenario (#1976).
-    expect(instruction).toContain('flags longer descriptions in ADDED requirements and in the main spec');
-    expect(instruction).toContain('keep its header and every scenario');
+    expect(instruction).toContain('flags longer statements in `@added` rules and in the main spec');
+    expect(instruction).toContain('keep its ID and every scenario');
   });
 });
