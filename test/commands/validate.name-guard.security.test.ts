@@ -6,7 +6,7 @@ import { runCLI } from '../helpers/run-cli.js';
 
 /**
  * `--type` short-circuits the membership check, so the id reached
- * `path.join(root.specsDir, id, 'spec.md')` unguarded and
+ * `path.join(root.specsDir, id, 'spec.feature')` unguarded and
  * `openspec validate ../../secret --type spec` traversed out of the root.
  * `openspec show` already rejects the same input.
  */
@@ -20,7 +20,7 @@ describe('validate --type name guard', () => {
     await fs.mkdir(path.join(testDir, 'openspec', 'changes'), { recursive: true });
     await fs.mkdir(path.join(testDir, 'openspec', 'specs'), { recursive: true });
     await fs.mkdir(path.join(testDir, 'secret'), { recursive: true });
-    await fs.writeFile(path.join(testDir, 'secret', 'spec.md'), '# secret\n', 'utf-8');
+    await fs.writeFile(path.join(testDir, 'secret', 'spec.feature'), '# secret\n', 'utf-8');
   });
 
   afterEach(async () => {
@@ -42,27 +42,25 @@ describe('validate --type name guard', () => {
   });
 
   it('still accepts a nested spec id', async () => {
-    // Nested capabilities (specs/<area>/<capability>/spec.md, #1353) are legal,
+    // Nested capabilities (specs/<area>/<capability>/spec.feature, #1353) are legal,
     // so the guard runs per segment - rejecting every id containing a `/` would
     // break them, including the hint `validate --specs` prints.
     await fs.mkdir(path.join(testDir, 'openspec', 'specs', 'platform', 'widgets'), {
       recursive: true,
     });
     await fs.writeFile(
-      path.join(testDir, 'openspec', 'specs', 'platform', 'widgets', 'spec.md'),
+      path.join(testDir, 'openspec', 'specs', 'platform', 'widgets', 'spec.feature'),
       [
-        '# widgets',
+        'Feature: Widgets',
+        '  A nested capability used to prove nested ids still validate cleanly.',
         '',
-        '## Purpose',
-        'A nested capability used to prove nested ids still validate cleanly.',
+        '  @REQ-0001',
+        '  Rule: Widgets',
+        '    The system SHALL provide widgets.',
         '',
-        '## Requirements',
-        '### Requirement: Widgets',
-        'The system SHALL provide widgets.',
-        '',
-        '#### Scenario: Basic',
-        '- **WHEN** asked',
-        '- **THEN** it responds',
+        '    Scenario: Basic',
+        '      When asked',
+        '      Then it responds',
         '',
       ].join('\n')
     );

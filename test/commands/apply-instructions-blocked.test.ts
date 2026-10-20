@@ -33,8 +33,8 @@ describe('generateApplyInstructions blocked prerequisites', () => {
   function writeSpecs(): void {
     fs.mkdirSync(path.join(changeDir, 'specs', 'demo'), { recursive: true });
     fs.writeFileSync(
-      path.join(changeDir, 'specs', 'demo', 'spec.md'),
-      '## ADDED Requirements\n\n### Requirement: Demo\nThe system SHALL demo.\n\n#### Scenario: Works\n- **WHEN** run\n- **THEN** works\n'
+      path.join(changeDir, 'specs', 'demo', 'spec.feature'),
+      'Feature: Demo\n\n  @added @REQ-0001\n  Rule: Demo\n    The system SHALL demo.\n\n    Scenario: Works\n      When run\n      Then works\n'
     );
   }
 

@@ -31,34 +31,32 @@ There are changes proposed, but no delta specs provided yet.`;
     const msg = report.issues.map(i => i.message).join('\n');
     expect(msg).toContain('Change must have at least one delta');
     expect(msg).toContain('Ensure your change has a specs/ directory');
-    expect(msg).toContain('## ADDED/MODIFIED/REMOVED/RENAMED Requirements');
+    expect(msg).toContain('Gherkin rules tagged @added, @modified or @removed');
   });
 
-  it('adds guidance when spec missing Purpose/Requirements', async () => {
-    const specContent = `# Test Spec\n\n## Requirements\n\n### Requirement: Foo\nFoo SHALL ...\n\n#### Scenario: Bar\nWhen...`;
-    const specPath = path.join(testDir, 'spec.md');
+  it('adds an example of the format when the spec has no Feature line', async () => {
+    const specContent = `# Test Spec\n# Requirements are written as comments, so there is no Feature.\n`;
+    const specPath = path.join(testDir, 'spec.feature');
     await fs.writeFile(specPath, specContent);
 
     const validator = new Validator();
     const report = await validator.validateSpec(specPath);
     expect(report.valid).toBe(false);
     const msg = report.issues.map(i => i.message).join('\n');
-    expect(msg).toContain('Spec must have a Purpose section');
-    expect(msg).toContain('Expected headers: "## Purpose" and "## Requirements"');
+    expect(msg).toContain('Spec must have a "Feature:" line');
+    expect(msg).toContain('A spec is a Gherkin feature file. Example:');
+    expect(msg).toContain('  @REQ-0001\n  Rule: <requirement name>');
   });
 
-  it('warns with scenario conversion template when missing scenarios', async () => {
-    const specContent = `# Test Spec
+  it('warns with a scenario template when a requirement has no scenario', async () => {
+    const specContent = `Feature: Test Spec
+  This is a sufficiently long purpose section to avoid warnings about brevity.
 
-## Purpose
-This is a sufficiently long purpose section to avoid warnings about brevity.
-
-## Requirements
-
-### Requirement: Foo SHALL be described
-Text of requirement
+  @REQ-0001
+  Rule: Foo
+    Foo SHALL be described.
 `;
-    const specPath = path.join(testDir, 'spec.md');
+    const specPath = path.join(testDir, 'spec.feature');
     await fs.writeFile(specPath, specContent);
 
     const validator = new Validator();
@@ -66,9 +64,7 @@ Text of requirement
     expect(report.valid).toBe(false);
     const warn = report.issues.find(i => i.path.includes('requirements[0].scenarios'));
     expect(warn?.message).toContain('Requirement must have at least one scenario');
-    expect(warn?.message).toContain('Scenarios must use level-4 headers');
-    expect(warn?.message).toContain('#### Scenario:');
+    expect(warn?.message).toContain('Write each scenario inside its Rule:');
+    expect(warn?.message).toContain('    Scenario: Short name');
   });
 });
-
-

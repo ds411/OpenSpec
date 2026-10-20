@@ -8,7 +8,7 @@ This page is for the moment you think "wait, can I go back and change that?" Yes
 
 You always have both:
 
-1. **Edit the file directly.** Artifacts are plain Markdown in `openspec/changes/<name>/`. Open `proposal.md`, `design.md`, `tasks.md`, or a delta spec under `specs/` in your editor and change it. Nothing else is required.
+1. **Edit the file directly.** Artifacts are plain text in `openspec/changes/<name>/`: Markdown documents and Gherkin delta specs. Open `proposal.md`, `design.md`, `tasks.md`, or a delta spec under `specs/` in your editor and change it. Nothing else is required.
 
 2. **Ask your AI to revise it.** In chat, just say what you want: "Update the proposal to drop the caching idea and add a rate-limit section," or "the design should use a queue, not polling." The AI edits the artifact for you, using the rest of the change as context.
 

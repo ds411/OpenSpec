@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { Validator } from '../../src/core/validation/validator.js';
 import { buildUpdatedSpec, findSpecUpdates } from '../../src/core/specs-apply.js';
+import { featureRule, type FixtureScenario } from '../helpers/openspec-fixtures.js';
 
 /**
  * validate reports the scenario loss archive refuses to apply (#1477).
@@ -11,44 +12,48 @@ import { buildUpdatedSpec, findSpecUpdates } from '../../src/core/specs-apply.js
  * The point of these tests is parity: every case validate rejects must be one
  * archive already rejects, and every case archive accepts must stay valid.
  */
-describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)', () => {
+describe('validate: @modified rules that would drop a main-spec scenario (#1477)', () => {
   let testDir: string;
   let changesDir: string;
   let mainSpecsDir: string;
 
-  /** Two scenarios in the main spec; the delta below keeps only the first. */
-  const TWO_SCENARIO_REQUIREMENT = `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n\n#### Scenario: Second scenario\n- **WHEN** idle\n- **THEN** idle is reported`;
-  const DELTA_KEEPING_ONE = `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n`;
+  const EXISTING: FixtureScenario = { name: 'Existing scenario', steps: ['When queried', 'Then the state is reported'] };
+  const SECOND: FixtureScenario = { name: 'Second scenario', steps: ['When idle', 'Then idle is reported'] };
 
-  const mainSpec = (body: string) =>
-    `# widgets Specification\n\n## Purpose\nDefine widget behavior for these tests.\n\n## Requirements\n\n${body}\n`;
+  const widgetRule = (scenarios: FixtureScenario[], tags: string[] = [], id = 'REQ-0001', name = 'Widget state') =>
+    featureRule({ id, tags, name, statement: 'The system SHALL report the widget state.', scenarios });
+
+  /** Two scenarios in the main spec; the delta below keeps only the first. */
+  const TWO_SCENARIO_REQUIREMENT = widgetRule([EXISTING, SECOND]);
+
+  const mainSpec = (body: string) => `Feature: Widgets\n  Define widget behavior for these tests.\n\n${body}\n`;
+  const delta = (...rules: string[]) => `Feature: Widgets\n\n${rules.join('\n\n')}\n`;
+  const DELTA_KEEPING_ONE = delta(widgetRule([EXISTING], ['modified']));
 
   const writeMainSpec = async (id: string, content: string) => {
-    const file = path.join(mainSpecsDir, ...id.split('/'), 'spec.md');
+    const file = path.join(mainSpecsDir, ...id.split('/'), 'spec.feature');
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, content);
   };
 
-  const writeChange = async (changeName: string, specId: string, delta: string) => {
+  const writeChange = async (changeName: string, specId: string, content: string) => {
     const changeDir = path.join(changesDir, changeName);
     const specDir = path.join(changeDir, 'specs', ...specId.split('/'));
     await fs.mkdir(specDir, { recursive: true });
-    await fs.writeFile(path.join(specDir, 'spec.md'), delta);
+    await fs.writeFile(path.join(specDir, 'spec.feature'), content);
     return changeDir;
   };
 
   /** The scenario-loss issue, so assertions cannot pass on an unrelated error. */
   const lossIssue = (report: { issues: Array<{ level: string; path: string; message: string }> }) =>
-    report.issues.find((i) => i.message.includes('omits scenario(s)'));
+    report.issues.find((i) => i.message.includes('leaves out scenario(s)'));
 
-  const validate = (changeDir: string) =>
-    new Validator(true).validateChangeDeltaSpecs(changeDir, { mainSpecsDir });
+  const validate = (changeDir: string) => new Validator(true).validateChangeDeltaSpecs(changeDir, { mainSpecsDir });
 
   /**
    * What archive would do with the same change: null when it applies cleanly.
-   * It shares the comparison itself with the validator (that is the point of the
-   * refactor), so what it cross-checks is the layer above: spec discovery, which
-   * requirement block the MODIFIED lands on, and archive's operation order.
+   * It shares the comparison itself with the validator, so what it cross-checks
+   * is the layer above: spec discovery, and which rule the @modified lands on.
    */
   const archiveError = async (changeDir: string): Promise<string | null> => {
     const updates = await findSpecUpdates(changeDir, mainSpecsDir);
@@ -74,40 +79,29 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     await fs.rm(testDir, { recursive: true, force: true });
   });
 
-  it('errors when the MODIFIED block omits a scenario the main spec still has', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(TWO_SCENARIO_REQUIREMENT)
-    );
-    const changeDir = await writeChange(
-      'rename-scenario',
-      'widgets',
-      DELTA_KEEPING_ONE
-    );
+  it('errors when the @modified rule leaves out a scenario the main spec still has', async () => {
+    await writeMainSpec('widgets', mainSpec(TWO_SCENARIO_REQUIREMENT));
+    const changeDir = await writeChange('rename-scenario', 'widgets', DELTA_KEEPING_ONE);
 
     const report = await validate(changeDir);
 
     expect(report.valid).toBe(false);
-    const issue = report.issues.find((i) => i.message.includes('omits scenario(s)'));
+    const issue = lossIssue(report);
     expect(issue?.level).toBe('ERROR');
-    expect(issue?.path).toBe('widgets/spec.md');
-    expect(issue?.message).toContain('MODIFIED "Widget state"');
+    expect(issue?.path).toBe('widgets/spec.feature');
+    expect(issue?.message).toContain('@modified REQ-0001 ("Widget state")');
     expect(issue?.message).toContain('"Second scenario"');
-    // Parity: archive refuses this change today, naming the same scenario.
+    // Parity: archive refuses this change, naming the same scenario.
     expect(await archiveError(changeDir)).toContain('Second scenario');
   });
 
   it('counts repeated scenario names, so keeping one of two duplicates still errors', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Repeated\n- **WHEN** queried once\n- **THEN** the state is reported\n\n#### Scenario: Repeated\n- **WHEN** queried twice\n- **THEN** the state is reported again`
-      )
-    );
+    const repeated = (when: string): FixtureScenario => ({ name: 'Repeated', steps: [when, 'Then the state is reported'] });
+    await writeMainSpec('widgets', mainSpec(widgetRule([repeated('When queried once'), repeated('When queried twice')])));
     const changeDir = await writeChange(
       'drop-duplicate',
       'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Repeated\n- **WHEN** queried once\n- **THEN** the state is reported\n`
+      delta(widgetRule([repeated('When queried once')], ['modified']))
     );
 
     const report = await validate(changeDir);
@@ -117,17 +111,12 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     expect(await archiveError(changeDir)).toContain('Repeated');
   });
 
-  it('accepts a MODIFIED block that carries every current scenario over', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported`
-      )
-    );
+  it('accepts a @modified rule that carries every current scenario over', async () => {
+    await writeMainSpec('widgets', mainSpec(widgetRule([EXISTING])));
     const changeDir = await writeChange(
       'keeps-all',
       'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state promptly.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n\n#### Scenario: New scenario\n- **WHEN** it errors\n- **THEN** the error is reported\n`
+      delta(widgetRule([EXISTING, { name: 'New scenario', steps: ['When it errors', 'Then the error is reported'] }], ['modified']))
     );
 
     const report = await validate(changeDir);
@@ -136,126 +125,87 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     expect(await archiveError(changeDir)).toBeNull();
   });
 
-  it('stays silent when the requirement header is not in the main spec (sister change in flight)', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported`
-      )
+  it('accepts a scenario kept under a @removed tag, and archive deletes it', async () => {
+    await writeMainSpec('widgets', mainSpec(TWO_SCENARIO_REQUIREMENT));
+    const removedSecond = widgetRule([EXISTING, SECOND], ['modified']).replace(
+      '    Scenario: Second scenario',
+      '    @removed\n    Scenario: Second scenario'
     );
+    const changeDir = await writeChange('drop-on-purpose', 'widgets', delta(removedSecond));
+
+    const report = await validate(changeDir);
+
+    expect(report.issues).toEqual([]);
+    const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
+    const { rebuilt } = await buildUpdatedSpec(update, 'drop-on-purpose', { silent: true });
+    expect(rebuilt).toContain('Scenario: Existing scenario');
+    expect(rebuilt).not.toContain('Second scenario');
+    expect(rebuilt).not.toContain('@removed');
+  });
+
+  it('stays silent when the requirement ID is not in the main spec (sister change in flight)', async () => {
+    await writeMainSpec('widgets', mainSpec(widgetRule([EXISTING])));
     const changeDir = await writeChange(
       'cross-change',
       'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget colour\nThe system SHALL report the widget colour.\n\n#### Scenario: Colour queried\n- **WHEN** queried\n- **THEN** the colour is reported\n`
+      delta(widgetRule([{ name: 'Colour queried' }], ['modified'], 'REQ-0002', 'Widget colour'))
     );
 
     const report = await validate(changeDir);
 
+    expect(lossIssue(report)).toBeUndefined();
     expect(report.valid).toBe(true);
   });
 
   it('stays silent when the main spec file does not exist yet', async () => {
-    const changeDir = await writeChange(
-      'greenfield',
-      'gadgets',
-      `## MODIFIED Requirements\n\n### Requirement: Gadget state\nThe system SHALL report the gadget state.\n\n#### Scenario: Gadget queried\n- **WHEN** queried\n- **THEN** the state is reported\n`
-    );
+    const changeDir = await writeChange('greenfield', 'gadgets', DELTA_KEEPING_ONE);
 
     const report = await validate(changeDir);
 
+    expect(lossIssue(report)).toBeUndefined();
     expect(report.valid).toBe(true);
   });
 
-  it('ignores a #### Scenario: sample inside a fenced block in the main spec', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Real scenario\n- **WHEN** queried\n- **THEN** the state is reported\n\n\`\`\`markdown\n#### Scenario: Sample inside a fence\n- **WHEN** copied\n- **THEN** it is only an example\n\`\`\``
-      )
-    );
-    const changeDir = await writeChange(
-      'fenced-sample',
-      'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state clearly.\n\n#### Scenario: Real scenario\n- **WHEN** queried\n- **THEN** the state is reported\n`
-    );
+  it('ignores a Scenario: line inside a doc string in the main spec', async () => {
+    const withDocString = widgetRule([
+      { name: 'Existing scenario', steps: ['When queried with:', '  """', '  Scenario: Quoted sample', '  """', 'Then the state is reported'] },
+    ]);
+    await writeMainSpec('widgets', mainSpec(withDocString));
+    const changeDir = await writeChange('doc-string', 'widgets', delta(withDocString.replace('  @REQ', '  @modified @REQ')));
 
     const report = await validate(changeDir);
 
-    expect(report.valid).toBe(true);
+    expect(lossIssue(report)).toBeUndefined();
     expect(await archiveError(changeDir)).toBeNull();
   });
 
   it('resolves nested capability layouts against the matching main spec', async () => {
-    await writeMainSpec(
-      'platform/session',
-      mainSpec(
-        `### Requirement: Session start\nThe system SHALL start a session.\n\n#### Scenario: Started\n- **WHEN** requested\n- **THEN** a session starts\n\n#### Scenario: Resumed\n- **WHEN** resumed\n- **THEN** the session continues`
-      )
-    );
-    const changeDir = await writeChange(
-      'nested-drop',
-      'platform/session',
-      `## MODIFIED Requirements\n\n### Requirement: Session start\nThe system SHALL start a session quickly.\n\n#### Scenario: Started\n- **WHEN** requested\n- **THEN** a session starts\n`
-    );
+    await writeMainSpec('platform/widgets', mainSpec(TWO_SCENARIO_REQUIREMENT));
+    const changeDir = await writeChange('nested', 'platform/widgets', DELTA_KEEPING_ONE);
 
     const report = await validate(changeDir);
 
-    expect(report.valid).toBe(false);
-    const issue = report.issues.find((i) => i.message.includes('omits scenario(s)'));
-    expect(issue?.path).toBe('platform/session/spec.md');
-    expect(issue?.message).toContain('"Resumed"');
+    expect(lossIssue(report)?.path).toBe('platform/widgets/spec.feature');
+    expect(await archiveError(changeDir)).toContain('Second scenario');
   });
 
-  it('checks a MODIFIED that names the new header of a rename in the same delta', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Old name\nThe system SHALL do the old thing.\n\n#### Scenario: Kept\n- **WHEN** invoked\n- **THEN** it works\n\n#### Scenario: Dropped\n- **WHEN** retried\n- **THEN** it still works`
-      )
-    );
+  it('checks a @modified rule that renames the requirement, matched by ID', async () => {
+    await writeMainSpec('widgets', mainSpec(TWO_SCENARIO_REQUIREMENT));
     const changeDir = await writeChange(
-      'rename-then-modify',
+      'rename',
       'widgets',
-      `## RENAMED Requirements\n\n- FROM: \`### Requirement: Old name\`\n- TO: \`### Requirement: New name\`\n\n## MODIFIED Requirements\n\n### Requirement: New name\nThe system SHALL do the new thing.\n\n#### Scenario: Kept\n- **WHEN** invoked\n- **THEN** it works\n`
+      delta(widgetRule([EXISTING], ['modified'], 'REQ-0001', 'Widget status'))
     );
 
     const report = await validate(changeDir);
 
-    expect(report.valid).toBe(false);
-    expect(lossIssue(report)?.message).toContain('"Dropped"');
-    expect(await archiveError(changeDir)).toContain('Dropped');
-  });
-
-  it('follows a chain of renames back to the block the main spec still holds', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Alpha\nThe system SHALL do the alpha thing.\n\n#### Scenario: Kept\n- **WHEN** invoked\n- **THEN** it works\n\n#### Scenario: Dropped\n- **WHEN** retried\n- **THEN** it still works`
-      )
-    );
-    const changeDir = await writeChange(
-      'rename-chain',
-      'widgets',
-      `## RENAMED Requirements\n\n- FROM: \`### Requirement: Alpha\`\n- TO: \`### Requirement: Bravo\`\n- FROM: \`### Requirement: Bravo\`\n- TO: \`### Requirement: Charlie\`\n\n## MODIFIED Requirements\n\n### Requirement: Charlie\nThe system SHALL do the charlie thing.\n\n#### Scenario: Kept\n- **WHEN** invoked\n- **THEN** it works\n`
-    );
-
-    const report = await validate(changeDir);
-
-    expect(report.valid).toBe(false);
-    expect(lossIssue(report)?.message).toContain('"Dropped"');
-    expect(await archiveError(changeDir)).toContain('Dropped');
+    expect(lossIssue(report)?.message).toContain('"Second scenario"');
+    expect(await archiveError(changeDir)).toContain('Second scenario');
   });
 
   it('reads a CRLF main spec the same way archive does', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(TWO_SCENARIO_REQUIREMENT).replace(/\n/g, '\r\n')
-    );
-    const changeDir = await writeChange(
-      'crlf-drop',
-      'widgets',
-      `## MODIFIED Requirements\r\n\r\n### Requirement: Widget state\r\nThe system SHALL report the widget state.\r\n\r\n#### Scenario: Existing scenario\r\n- **WHEN** queried\r\n- **THEN** the state is reported\r\n`
-    );
+    await writeMainSpec('widgets', mainSpec(TWO_SCENARIO_REQUIREMENT).replace(/\n/g, '\r\n'));
+    const changeDir = await writeChange('crlf-drop', 'widgets', DELTA_KEEPING_ONE.replace(/\n/g, '\r\n'));
 
     const report = await validate(changeDir);
 
@@ -265,15 +215,8 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
   });
 
   it('runs no main-spec check when the caller passes no main specs directory', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(TWO_SCENARIO_REQUIREMENT)
-    );
-    const changeDir = await writeChange(
-      'no-root',
-      'widgets',
-      DELTA_KEEPING_ONE
-    );
+    await writeMainSpec('widgets', mainSpec(TWO_SCENARIO_REQUIREMENT));
+    const changeDir = await writeChange('no-root', 'widgets', DELTA_KEEPING_ONE);
 
     const report = await new Validator(true).validateChangeDeltaSpecs(changeDir);
 
@@ -291,54 +234,10 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     expect(lossIssue(report)?.level).toBe('ERROR');
   });
 
-  it('terminates on a rename cycle instead of walking it forever', async () => {
-    // Two guards keep the rename walk out of a cycle (the rename-away skip and
-    // the visited set). A hang here is unrecoverable — it blocks the event loop,
-    // so no test timeout can interrupt it — which is why the input is pinned.
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Untouched\nThe system SHALL do the untouched thing.\n\n#### Scenario: Only\n- **WHEN** invoked\n- **THEN** it works`
-      )
-    );
-    const changeDir = await writeChange(
-      'rename-cycle',
-      'widgets',
-      `## RENAMED Requirements\n\n- FROM: \`### Requirement: Alpha\`\n- TO: \`### Requirement: Bravo\`\n- FROM: \`### Requirement: Bravo\`\n- TO: \`### Requirement: Alpha\`\n\n## MODIFIED Requirements\n\n### Requirement: Alpha\nThe system SHALL do the alpha thing.\n\n#### Scenario: Only\n- **WHEN** invoked\n- **THEN** it works\n`
-    );
-
-    const report = await validate(changeDir);
-
-    expect(report).toBeDefined();
-    expect(lossIssue(report)).toBeUndefined();
-  });
-
-  it('ignores a fenced scenario sample inside the MODIFIED block itself', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n\n#### Scenario: Second scenario\n- **WHEN** idle\n- **THEN** idle is reported`
-      )
-    );
-    // The delta quotes "Second scenario" inside a fence; a fenced sample is not
-    // a scenario, so it must not satisfy the requirement to carry it over.
-    const changeDir = await writeChange(
-      'fenced-in-delta',
-      'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n\n\`\`\`markdown\n#### Scenario: Second scenario\n- **WHEN** idle\n- **THEN** idle is reported\n\`\`\`\n`
-    );
-
-    const report = await validate(changeDir);
-
-    expect(report.valid).toBe(false);
-    expect(lossIssue(report)?.message).toContain('"Second scenario"');
-    expect(await archiveError(changeDir)).toContain('Second scenario');
-  });
-
   it('says so when the main spec exists but cannot be read', async () => {
-    // A directory where spec.md belongs reads as EISDIR: not absent, and archive
-    // aborts on it, so reporting beats calling the change valid.
-    await fs.mkdir(path.join(mainSpecsDir, 'widgets', 'spec.md'), { recursive: true });
+    // A directory where spec.feature belongs reads as EISDIR: not absent, and
+    // archive aborts on it, so reporting beats calling the change valid.
+    await fs.mkdir(path.join(mainSpecsDir, 'widgets', 'spec.feature'), { recursive: true });
     const changeDir = await writeChange('unreadable-main-spec', 'widgets', DELTA_KEEPING_ONE);
 
     const report = await validate(changeDir);
@@ -346,7 +245,7 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     expect(report.valid).toBe(false);
     const issue = report.issues.find((i) => i.message.includes('Could not read'));
     expect(issue?.level).toBe('ERROR');
-    expect(issue?.message).toContain('widgets/spec.md');
+    expect(issue?.message).toContain('widgets/spec.feature');
     expect(issue?.message).toContain('EISDIR');
     expect(await archiveError(changeDir)).not.toBeNull();
   });
@@ -359,7 +258,7 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     const changeDir = await writeChange('transient-read-error', 'widgets', DELTA_KEEPING_ONE);
     // Only the main spec read fails: the delta must still be read, or the check
     // never runs and the test proves nothing.
-    const mainSpecFile = path.join(mainSpecsDir, 'widgets', 'spec.md');
+    const mainSpecFile = path.join(mainSpecsDir, 'widgets', 'spec.feature');
     const readFile = fs.readFile;
     const spy = vi.spyOn(fs, 'readFile').mockImplementation(async (file, ...rest) => {
       if (String(file) === mainSpecFile) {
@@ -375,110 +274,5 @@ describe('validate: MODIFIED blocks that would drop a main-spec scenario (#1477)
     } finally {
       spy.mockRestore();
     }
-  });
-
-  it('detects a dropped level-4 scenario whose header is not labeled "Scenario:"', async () => {
-    // The spec path (SCENARIO_HEADER / countScenarios) counts EVERY `#### `
-    // child of a requirement as a scenario, so archive replaces the whole block
-    // and drops an unlabeled `#### Edge case`. The loss check must see it too,
-    // or the drop is silent (validate passes, archive deletes it with no error).
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n\n#### Edge case\n- **WHEN** disabled\n- **THEN** nothing is reported`
-      )
-    );
-    const changeDir = await writeChange(
-      'drop-unlabeled-scenario',
-      'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n`
-    );
-
-    const report = await validate(changeDir);
-
-    expect(report.valid).toBe(false);
-    expect(lossIssue(report)?.message).toContain('"Edge case"');
-    // Parity: archive refuses the same change, naming the same scenario.
-    expect(await archiveError(changeDir)).toContain('Edge case');
-  });
-
-  it('detects a dropped labeled scenario even when an unlabeled sibling is kept', async () => {
-    // The reverse of the case above: labels and non-labels are counted the same
-    // way, in both directions, so dropping the labeled one is still caught.
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Labeled\n- **WHEN** queried\n- **THEN** the state is reported\n\n#### Unlabeled\n- **WHEN** idle\n- **THEN** idle is reported`
-      )
-    );
-    const changeDir = await writeChange(
-      'drop-labeled-keep-unlabeled',
-      'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Unlabeled\n- **WHEN** idle\n- **THEN** idle is reported\n`
-    );
-
-    const report = await validate(changeDir);
-
-    expect(report.valid).toBe(false);
-    expect(lossIssue(report)?.message).toContain('"Labeled"');
-    expect(await archiveError(changeDir)).toContain('Labeled');
-  });
-
-  it('does not name scenarios for a MODIFIED the same delta renames away', async () => {
-    // The block this MODIFIED would land on is not the one it names, so any
-    // scenario reported here would send the author after the wrong requirement.
-    // The contradiction itself is still reported by the RENAMED/MODIFIED check.
-    await writeMainSpec(
-      'widgets',
-      mainSpec(
-        `### Requirement: Old name\nThe system SHALL do the old thing.\n\n#### Scenario: Kept\n- **WHEN** invoked\n- **THEN** it works\n\n#### Scenario: Dropped\n- **WHEN** retried\n- **THEN** it still works`
-      )
-    );
-    const changeDir = await writeChange(
-      'modifies-renamed-away',
-      'widgets',
-      `## RENAMED Requirements\n\n- FROM: \`### Requirement: Old name\`\n- TO: \`### Requirement: New name\`\n\n## MODIFIED Requirements\n\n### Requirement: Old name\nThe system SHALL do the old thing.\n\n#### Scenario: Kept\n- **WHEN** invoked\n- **THEN** it works\n`
-    );
-
-    const report = await validate(changeDir);
-
-    expect(report.valid).toBe(false);
-    expect(lossIssue(report)).toBeUndefined();
-    expect(report.issues.map((i) => i.message).join('\n')).toContain('MODIFIED references old name from RENAMED');
-  });
-  it('reports both new headings when one current scenario is replaced by two (#1697)', async () => {
-    await writeMainSpec(
-      'widgets',
-      mainSpec(`### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported`)
-    );
-    const widened = `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario, first branch\n- **WHEN** queried in the first case\n- **THEN** the first state is reported\n\n#### Scenario: Existing scenario, second branch\n- **WHEN** queried in the second case\n- **THEN** the second state is reported\n`;
-    const changeDir = await writeChange('widen-scenario', 'widgets', widened);
-
-    const report = await validate(changeDir);
-    const issue = lossIssue(report);
-
-    // The guard still fires: a widened title is a dropped name, and nothing
-    // here decides whether that was deliberate.
-    expect(report.valid).toBe(false);
-    expect(issue?.message).toContain('"Existing scenario"');
-    expect(issue?.message).toContain(
-      'The modified block has 2 scenarios; the current spec has 1 scenario. It adds 2 scenarios not in the current spec: "Existing scenario, first branch", "Existing scenario, second branch".'
-    );
-    // Parity: archive refuses the same change and prints the same sentence.
-    expect(await archiveError(changeDir)).toContain(
-      'It adds 2 scenarios not in the current spec: "Existing scenario, first branch", "Existing scenario, second branch".'
-    );
-  });
-
-  it('says the block adds none when scenarios are only dropped (#1697)', async () => {
-    await writeMainSpec('widgets', mainSpec(TWO_SCENARIO_REQUIREMENT));
-    const changeDir = await writeChange('drop-scenario', 'widgets', DELTA_KEEPING_ONE);
-
-    const issue = lossIssue(await validate(changeDir));
-
-    expect(issue?.message).toContain(
-      'The modified block has 1 scenario; the current spec has 2 scenarios. It adds none.'
-    );
-    expect(await archiveError(changeDir)).toContain('It adds none.');
   });
 });

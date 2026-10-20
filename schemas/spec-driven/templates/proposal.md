@@ -16,7 +16,7 @@
      implementation tasks or proposal sections. Avoid broad catch-all names. Use
      kebab-case for path segments you introduce (e.g., user-auth or identity/user-auth)
      that follow the project's existing spec organization. Each creates
-     specs/<capability-path>/spec.md. -->
+     specs/<capability-path>/spec.feature. -->
 - `<capability-path>`: <brief description of what this capability covers>
 
 ### Modified Capabilities

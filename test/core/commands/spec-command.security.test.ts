@@ -25,7 +25,7 @@ describe('SpecCommand path boundaries', () => {
   });
 
   it('rejects a traversing legacy spec id', async () => {
-    const outsideSpec = path.join(tempDir, 'outside', 'spec.md');
+    const outsideSpec = path.join(tempDir, 'outside', 'spec.feature');
     await fs.mkdir(path.dirname(outsideSpec), { recursive: true });
     await fs.writeFile(outsideSpec, '# Outside sentinel');
 
@@ -37,8 +37,8 @@ describe('SpecCommand path boundaries', () => {
   it.skipIf(process.platform === 'win32')(
     'rejects a spec file symlink that leaves the project',
     async () => {
-      const outsideSpec = path.join(tempDir, 'outside.md');
-      const linkedSpec = path.join(projectDir, 'openspec', 'specs', 'linked', 'spec.md');
+      const outsideSpec = path.join(tempDir, 'outside.feature');
+      const linkedSpec = path.join(projectDir, 'openspec', 'specs', 'linked', 'spec.feature');
       await fs.writeFile(outsideSpec, '# Outside sentinel');
       await fs.mkdir(path.dirname(linkedSpec), { recursive: true });
       await fs.symlink(outsideSpec, linkedSpec);
@@ -50,17 +50,17 @@ describe('SpecCommand path boundaries', () => {
   );
 
   it.skipIf(process.platform === 'win32')(
-    'shows a spec.md linked to a file elsewhere in the project',
+    'shows a spec.feature linked to a file elsewhere in the project',
     async () => {
       // The reported layout (#2100): the spec lives beside the product docs it
-      // belongs to and openspec/specs/<capability>/spec.md links to it.
-      const docsSpec = path.join(projectDir, 'docs', 'auth', 'specs', 'login.md');
+      // belongs to and openspec/specs/<capability>/spec.feature links to it.
+      const docsSpec = path.join(projectDir, 'docs', 'auth', 'specs', 'login.feature');
       await fs.mkdir(path.dirname(docsSpec), { recursive: true });
       await fs.writeFile(
         docsSpec,
-        '# login\n\n## Purpose\n\nUsers sign in.\n\n## Requirements\n'
+        'Feature: Login\n  Users sign in.\n'
       );
-      const linkedSpec = path.join(projectDir, 'openspec', 'specs', 'login', 'spec.md');
+      const linkedSpec = path.join(projectDir, 'openspec', 'specs', 'login', 'spec.feature');
       await fs.mkdir(path.dirname(linkedSpec), { recursive: true });
       await fs.symlink(
         path.relative(path.dirname(linkedSpec), docsSpec),
@@ -77,8 +77,8 @@ describe('SpecCommand path boundaries', () => {
       const sharedCapability = path.join(tempDir, 'shared-capability');
       await fs.mkdir(sharedCapability);
       await fs.writeFile(
-        path.join(sharedCapability, 'spec.md'),
-        '# Shared\n\n## Purpose\n\nShared safely.\n\n## Requirements\n'
+        path.join(sharedCapability, 'spec.feature'),
+        'Feature: Shared\n  Shared safely.\n'
       );
       await fs.symlink(
         sharedCapability,
@@ -93,11 +93,11 @@ describe('SpecCommand path boundaries', () => {
     'allows a spec file symlink elsewhere in the specs root',
     async () => {
       const specsDir = path.join(projectDir, 'openspec', 'specs');
-      const sharedSpec = path.join(specsDir, 'shared.md');
-      const linkedSpec = path.join(specsDir, 'linked', 'spec.md');
+      const sharedSpec = path.join(specsDir, 'shared.feature');
+      const linkedSpec = path.join(specsDir, 'linked', 'spec.feature');
       await fs.writeFile(
         sharedSpec,
-        '# Shared\n\n## Purpose\n\nShared safely.\n\n## Requirements\n'
+        'Feature: Shared\n  Shared safely.\n'
       );
       await fs.mkdir(path.dirname(linkedSpec), { recursive: true });
       await fs.symlink(sharedSpec, linkedSpec);

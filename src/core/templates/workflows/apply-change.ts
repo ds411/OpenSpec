@@ -125,6 +125,7 @@ ${PROJECT_ROOT_GUARD}
    For each pending task:
    - Show which task is being worked on
    - Make the code changes required
+   - Where the code implements a requirement from the change's specs, mark it with a comment that holds \`@trace\` and the requirement's ID (from the \`@REQ-...\` tag above its \`Rule:\`), in the file's comment syntax, for example \`// @trace <ID>\` with \`<ID>\` replaced. Mark the tests that check its scenarios the same way. If an \`@added\` requirement has no ID yet, run \`openspec ids assign "<name>"\` first
    - Keep changes minimal and focused
    - Before editing, confirm the checkbox at the returned \`sourcePath\` and \`line\` still matches the task description; if it does not, rerun the apply instructions and use the refreshed location
    - Mark the task complete at its returned \`sourcePath\` and \`line\`: \`- [ ]\` → \`- [x]\`
@@ -204,6 +205,7 @@ What would you like to do?
 - If task is ambiguous, pause and ask before implementing
 - If implementation reveals issues, pause and suggest artifact updates
 - Keep code changes minimal and scoped to each task
+- Trace code to requirements with \`@trace\` comments that name their IDs; use only IDs a spec has, and never invent one
 - Update task checkbox immediately after completing each task
 - Pause on errors, blockers, or unclear requirements - don't guess
 - When a task needs work beyond what the spec describes, surface the added scope and pause - never silently narrow, defer, or simplify away specified behavior

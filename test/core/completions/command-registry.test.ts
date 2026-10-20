@@ -167,7 +167,10 @@ describe('command completion registry', () => {
     expect(seen.sort()).toEqual([
       'archive',
       'context',
+      'convert-specs',
       'doctor',
+      'ids assign',
+      'ids next',
       'instructions',
       'list',
       'new change',

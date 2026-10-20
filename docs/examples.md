@@ -37,7 +37,7 @@ AI:  Working through tasks...
 You: /opsx:archive
 
 AI:  Archiving add-logout-button...
-     ✓ Merged specs into openspec/specs/auth/spec.md
+     ✓ Merged specs into openspec/specs/auth/spec.feature
      ✓ Moved to openspec/changes/archive/2026-06-22-add-logout-button/
      Done. Ready for the next change.
 ```
@@ -55,14 +55,14 @@ You: /opsx:propose fix-login-redirect-loop
 
 AI:  Created openspec/changes/fix-login-redirect-loop/
      The proposal captures the current broken behavior and the
-     intended behavior. The delta spec MODIFIES the redirect
+     intended behavior. The delta spec modifies the redirect
      requirement so it's now precise and testable.
      Ready for implementation.
 ```
 
-Because the fix lands as a `MODIFIED` requirement with a fresh scenario, the next person (or the next AI session) sees not just that you fixed it, but what "correct" means. Then `/opsx:apply` and `/opsx:archive` as usual.
+Because the fix lands as a `@modified` requirement with a fresh scenario, the next person (or the next AI session) sees not just that you fixed it, but what "correct" means. Then `/opsx:apply` and `/opsx:archive` as usual.
 
-Tip: for a fix, a good scenario is the regression test in prose. "GIVEN a logged-out user, WHEN they submit valid credentials, THEN they land on the dashboard and are not redirected again." Write that, and the implementation has a clear target.
+Tip: for a fix, a good scenario is the regression test in prose. "Given a logged-out user, When they submit valid credentials, Then they land on the dashboard and are not redirected again." Write that, and the implementation has a clear target.
 
 ## Recipe 3: Exploring before you commit
 
@@ -181,7 +181,7 @@ AI:  Created proposal.md. Now available: specs, design.
 
 You: /opsx:continue
 
-AI:  Created specs/auth/spec.md. Now available: design.
+AI:  Created specs/auth/spec.feature. Now available: design.
 ```
 
 Review each artifact as it lands, edit freely, and continue when you're happy. When you want the rest drafted in one go, `/opsx:ff` fast-forwards through the remaining planning artifacts. Before archiving, `/opsx:verify` checks that the implementation actually matches the specs. See [Workflows](workflows.md#opsxff-vs-opsxcontinue).

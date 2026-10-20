@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import path from 'path';
-import { MarkdownParser } from '../parsers/markdown-parser.js';
+import { parseSpecContent } from '../gherkin/spec-model.js';
 import { ChangeParser } from '../parsers/change-parser.js';
 import { Spec, Change } from '../schemas/index.js';
 import { FileSystemUtils } from '../../utils/file-system.js';
@@ -8,10 +8,9 @@ import { FileSystemUtils } from '../../utils/file-system.js';
 export class JsonConverter {
   convertSpecToJson(filePath: string): string {
     const content = readFileSync(filePath, 'utf-8');
-    const parser = new MarkdownParser(content);
     const specName = this.extractNameFromPath(filePath);
-    
-    const spec = parser.parseSpec(specName);
+
+    const spec = parseSpecContent(content, specName);
     
     const jsonSpec = {
       ...spec,

@@ -26,9 +26,9 @@ artifacts:
     template: proposal.md
     requires: []
   - id: specs
-    generates: specs/**/*.md
+    generates: specs/**/*.feature
     description: Billing behavior
-    template: spec.md
+    template: spec.feature
     requires: [proposal]
   - id: design
     generates: planning/design.md
@@ -50,20 +50,16 @@ let storeRoot: string;
 let pointerProject: string;
 let env: NodeJS.ProcessEnv;
 
-const SPEC = `# billing
+const SPEC = `Feature: billing
+  Billing rules.
 
-## Purpose
+  @REQ-0001
+  Rule: Charge a card
+    The system SHALL charge a card.
 
-Billing rules.
-
-## Requirements
-
-### Requirement: Charge a card
-The system SHALL charge a card.
-
-#### Scenario: card is charged
-- **WHEN** a payment is due
-- **THEN** the card is charged
+    Scenario: card is charged
+      When a payment is due
+      Then the card is charged
 `;
 
 beforeAll(async () => {
@@ -88,7 +84,7 @@ beforeAll(async () => {
 
   const specDir = path.join(storeRoot, 'openspec', 'specs', 'billing');
   await fs.mkdir(specDir, { recursive: true });
-  await fs.writeFile(path.join(specDir, 'spec.md'), SPEC);
+  await fs.writeFile(path.join(specDir, 'spec.feature'), SPEC);
 
   const archiveDir = path.join(storeRoot, 'openspec', 'changes', 'archive', '2026-08-27-store-history');
   await fs.mkdir(archiveDir, { recursive: true });
@@ -97,7 +93,7 @@ beforeAll(async () => {
   const schemaDir = path.join(storeRoot, 'openspec', 'schemas', SCHEMA_NAME);
   await fs.mkdir(path.join(schemaDir, 'templates'), { recursive: true });
   await fs.writeFile(path.join(schemaDir, 'schema.yaml'), STORE_SCHEMA);
-  for (const template of ['proposal.md', 'spec.md', 'design.md', 'tasks.md']) {
+  for (const template of ['proposal.md', 'spec.feature', 'design.md', 'tasks.md']) {
     await fs.writeFile(path.join(schemaDir, 'templates', template), '# Billing\n');
   }
   await fs.writeFile(

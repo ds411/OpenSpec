@@ -9,25 +9,19 @@ import {
   PURPOSE_PLACEHOLDER_SUFFIX,
   VALIDATION_MESSAGES,
 } from '../../src/core/validation/constants.js';
+import { featureSpec } from '../helpers/openspec-fixtures.js';
 
 const ARCHIVE_TEXT = `${PURPOSE_PLACEHOLDER_PREFIX}add-retry-budget${PURPOSE_PLACEHOLDER_SUFFIX}`;
 
 const specWith = (purpose: string) =>
-  [
-    '# widgets Specification',
-    '',
-    '## Purpose',
-    purpose,
-    '',
-    '## Requirements',
-    '### Requirement: Retries are bounded',
-    'The system SHALL stop retrying a delivery after the configured budget.',
-    '',
-    '#### Scenario: Budget exhausted',
-    '- **WHEN** the budget is exhausted',
-    '- **THEN** the delivery is abandoned',
-    '',
-  ].join('\n');
+  featureSpec('Widgets', purpose, [
+    {
+      id: 'REQ-0001',
+      name: 'Retries are bounded',
+      statement: 'The system SHALL stop retrying a delivery after the configured budget.',
+      scenarios: [{ name: 'Budget exhausted', steps: ['When the budget is exhausted', 'Then the delivery is abandoned'] }],
+    },
+  ]);
 
 const REAL_PURPOSE =
   'Bounds how often a failed delivery is retried, so a permanently broken endpoint cannot occupy the worker pool forever.';
@@ -55,7 +49,7 @@ describe('Purpose placeholder validation', () => {
       expect(report.issues).toContainEqual({
         level: 'WARNING',
         path: 'overview',
-        line: 4,
+        line: 2,
         message: VALIDATION_MESSAGES.PURPOSE_IS_PLACEHOLDER,
       });
     });
@@ -163,7 +157,7 @@ describe('Purpose placeholder validation', () => {
     });
 
     it('reports a placeholder read off disk', async () => {
-      const file = path.join(dir, 'spec.md');
+      const file = path.join(dir, 'spec.feature');
       await fs.writeFile(file, specWith(ARCHIVE_TEXT), 'utf-8');
 
       const report = await new Validator(true).validateSpec(file);
@@ -175,8 +169,8 @@ describe('Purpose placeholder validation', () => {
     });
 
     it('reports the same line for a spec saved with CRLF endings', async () => {
-      const lf = path.join(dir, 'lf.md');
-      const crlf = path.join(dir, 'crlf.md');
+      const lf = path.join(dir, 'lf.feature');
+      const crlf = path.join(dir, 'crlf.feature');
       await fs.writeFile(lf, specWith(ARCHIVE_TEXT), 'utf-8');
       await fs.writeFile(crlf, specWith(ARCHIVE_TEXT).replace(/\n/g, '\r\n'), 'utf-8');
 
@@ -188,7 +182,7 @@ describe('Purpose placeholder validation', () => {
         {
           level: 'WARNING',
           path: 'overview',
-          line: 4,
+          line: 2,
           message: VALIDATION_MESSAGES.PURPOSE_IS_PLACEHOLDER,
         },
       ]);

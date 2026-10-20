@@ -31,16 +31,17 @@ describe('a linked capability directory outside the project', () => {
     await fs.mkdir(mainSpecsDir, { recursive: true });
     await fs.mkdir(outsideDir, { recursive: true });
     await fs.writeFile(
-      path.join(changeDir, 'specs', 'widgets', 'spec.md'),
+      path.join(changeDir, 'specs', 'widgets', 'spec.feature'),
       [
-        '## ADDED Requirements',
+        'Feature: Widgets',
         '',
-        '### Requirement: Pwned',
-        'The system SHALL be pwned.',
+        '  @added @REQ-0001',
+        '  Rule: Pwned',
+        '    The system SHALL be pwned.',
         '',
-        '#### Scenario: Apply',
-        '- **WHEN** the change is archived',
-        '- **THEN** the spec is updated',
+        '    Scenario: Apply',
+        '      When the change is archived',
+        '      Then the spec is updated',
         '',
       ].join('\n')
     );
@@ -68,10 +69,10 @@ describe('a linked capability directory outside the project', () => {
 
     const realOutside = await fs.realpath(outsideDir);
     // The write still happens - an external capability link is supported.
-    expect(update.target).toBe(path.join(realOutside, 'spec.md'));
+    expect(update.target).toBe(path.join(realOutside, 'spec.feature'));
     // But it is announced, with the path actually being written.
     expect(warnings.some((message) => message.includes(realOutside))).toBe(true);
-    // Named by its capability directory, not the spec.md every capability shares.
+    // Named by its capability directory, not the spec.feature every capability shares.
     expect(warnings.some((message) => message.startsWith("Capability 'widgets' "))).toBe(true);
   });
 
@@ -83,7 +84,7 @@ describe('a linked capability directory outside the project', () => {
     const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
 
     expect(update.target).toBe(
-      path.join(await fs.realpath(insideDir), 'spec.md')
+      path.join(await fs.realpath(insideDir), 'spec.feature')
     );
   });
 });

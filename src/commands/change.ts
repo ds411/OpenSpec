@@ -16,16 +16,10 @@ import {
 import { getTaskProgressForChange } from '../utils/task-progress.js';
 import { FileSystemUtils } from '../utils/file-system.js';
 import { assertDiscoveredSpecFile } from '../utils/spec-path-containment.js';
-import { discoverSpecFiles } from '../utils/spec-discovery.js';
-import {
-  foldRequirementName,
-  parseDeltaSpec,
-} from '../core/parsers/requirement-blocks.js';
-import {
-  extractRequirementBlock,
-  diffRequirementBlock,
-  buildRenameMap,
-} from '../utils/requirement-diff.js';
+import { discoverSpecFiles, SPEC_FILE_NAME } from '../utils/spec-discovery.js';
+import { parseFeature, ruleSource } from '../core/gherkin/document.js';
+import { parseDeltaFeature, stripOperationTags } from '../core/gherkin/delta.js';
+import { diffRequirementBlock } from '../utils/requirement-diff.js';
 
 /**
  * True only when `target` is definitively absent. An EACCES or I/O failure
@@ -51,11 +45,11 @@ function isChangeDirectoryName(changesPath: string, changeDir: string): boolean 
 /** One requirement of one delta spec, paired with its main-spec counterpart. */
 interface RequirementDiff {
   capability: string;
-  operation: 'ADDED' | 'REMOVED' | 'RENAMED' | 'MODIFIED';
+  operation: 'ADDED' | 'REMOVED' | 'MODIFIED';
+  /** The requirement ID and name, e.g. `REQ-0007 JSON output`. */
   requirementName: string;
   raw: string;
   diff?: string;
-  rename?: { from: string; to: string };
   warning?: string;
 }
 
@@ -215,76 +209,57 @@ export class ChangeCommand {
     for (const { id: capability, specFile: deltaSpecPath } of discovered) {
       const deltaContent = await fs.readFile(deltaSpecPath, 'utf-8');
 
-      const mainSpecPath = path.join(mainSpecsDir, ...capability.split('/'), 'spec.md');
+      const mainSpecPath = path.join(mainSpecsDir, ...capability.split('/'), SPEC_FILE_NAME);
       let mainContent: string | null = null;
       try {
         assertDiscoveredSpecFile(mainSpecsDir, mainSpecPath);
         mainContent = await fs.readFile(mainSpecPath, 'utf-8');
       } catch (error) {
         if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
-        // No main spec on disk. For ADDED requirements that is the ordinary new
-        // capability case; MODIFIED requirements are handled as a mismatch below.
+        // No main spec on disk. For @added rules that is the ordinary new
+        // capability case; @modified rules are handled as a mismatch below.
       }
 
-      const plan = parseDeltaSpec(deltaContent);
-      const renameMap = buildRenameMap(plan.renamed);
+      const plan = parseDeltaFeature(deltaContent);
+      const main = mainContent === null ? null : parseFeature(mainContent);
+      const label = (rule: { id?: string; name: string }) => (rule.id ? `${rule.id} ${rule.name}` : rule.name);
 
-      for (const block of plan.added) {
-        results.push({ capability, operation: 'ADDED', requirementName: block.name, raw: block.raw });
+      for (const { rule, raw } of plan.added) {
+        results.push({ capability, operation: 'ADDED', requirementName: label(rule), raw });
       }
 
-      // Prefer the authored REMOVED block so its Reason/Migration text reaches
-      // the reader; the bullet-list form carries a name and nothing else.
-      const removedBlocks = new Map(
-        plan.removedBlocks.map(block => [foldRequirementName(block.name), block.raw])
-      );
-      for (const name of plan.removed) {
-        const raw = removedBlocks.get(foldRequirementName(name));
-        results.push({
-          capability,
-          operation: 'REMOVED',
-          requirementName: name,
-          raw: raw ?? `### Requirement: ${name}`,
-        });
+      for (const { rule, raw } of plan.removed) {
+        results.push({ capability, operation: 'REMOVED', requirementName: label(rule), raw });
       }
 
-      for (const rename of plan.renamed) {
-        results.push({ capability, operation: 'RENAMED', requirementName: rename.to, raw: '', rename });
-      }
-
-      for (const block of plan.modified) {
+      for (const { rule, raw } of plan.modified) {
         const entry: RequirementDiff = {
           capability,
           operation: 'MODIFIED',
-          requirementName: block.name,
-          raw: block.raw,
+          requirementName: label(rule),
+          raw,
         };
 
-        // A requirement renamed and modified in the same delta still lives in
-        // the main spec under its old name, so look it up there.
-        const oldName = renameMap.get(foldRequirementName(block.name));
-        const lookupName = oldName ?? block.name;
-
-        const match = mainContent ? extractRequirementBlock(mainContent, lookupName) : null;
-        if (match) {
-          entry.diff = diffRequirementBlock(match.raw, block.raw, `${capability}/${block.name}`);
-          if (!match.exact) {
-            // Archive matches requirement names exactly, so a header that
-            // differs only in case or spacing will not merge. Show the diff the
-            // author meant, and name the mismatch while it is still cheap to fix.
-            entry.warning =
-              `Header differs from the main spec's "${match.name}" only in case or spacing; ` +
-              `archive matches names exactly, so reconcile them before archiving`;
-          }
+        // Archive matches by ID, so the diff does too: a renamed requirement
+        // is still the same rule. The operation tag is left out, since archive
+        // drops it and it is not a change to the requirement.
+        const match = main && rule.id ? main.rules.find((candidate) => candidate.id === rule.id) : undefined;
+        if (main && match) {
+          entry.diff = diffRequirementBlock(
+            ruleSource(main, match),
+            stripOperationTags(raw, rule),
+            `${capability}/${label(rule)}`
+          );
+        } else if (!rule.id) {
+          entry.warning = `Rule "${rule.name}" has no requirement ID, so it cannot be matched to the main spec`;
         } else if (mainContent) {
-          entry.warning = `No matching main requirement found for "${lookupName}" in ${capability}`;
+          entry.warning = `No requirement ${rule.id} in the main spec of ${capability}`;
         } else {
-          // A MODIFIED requirement names a block that should already exist, so a
-          // missing main spec is an authoring error, not a new capability.
-          // Rendering it as all-additions would hide what archive will reject.
+          // A @modified rule names a requirement that should already exist, so
+          // a missing main spec is an authoring error, not a new capability.
           entry.warning =
-            `No main spec at openspec/specs/${capability}/spec.md, ` +
-            `so MODIFIED requirement "${block.name}" has nothing to diff against`;
+            `No main spec at openspec/specs/${capability}/${SPEC_FILE_NAME}, ` +
+            `so @modified requirement ${label(rule)} has nothing to diff against`;
         }
 
         results.push(entry);
@@ -382,18 +357,11 @@ export class ChangeCommand {
           console.log();
           break;
 
-        case 'RENAMED':
-          console.log(chalk.cyan.bold(`  RENAMED: ${r.rename?.from} → ${r.rename?.to}`));
-          console.log();
-          break;
-
         case 'MODIFIED':
           console.log(chalk.yellow.bold(`  MODIFIED: ${r.requirementName}`));
           if (r.warning) {
             console.log(chalk.yellow(`    ⚠ ${r.warning}`));
           }
-          // A near-miss header carries both: the warning about the mismatch and
-          // the diff against the block it almost matched.
           if (r.diff === undefined) {
             for (const line of r.raw.split('\n')) {
               console.log(`    ${line}`);
@@ -597,8 +565,9 @@ export class ChangeCommand {
       bullets.push('- Fix .openspec.yaml so the skip_specs marker can be honored (schema: <name> is required)');
       bullets.push('- Or remove skip_specs from .openspec.yaml and add delta specs instead');
     } else {
-      bullets.push('- Ensure change has deltas in specs/: use headers ## ADDED/MODIFIED/REMOVED/RENAMED Requirements');
-      bullets.push('- Each requirement MUST include at least one #### Scenario: block');
+      bullets.push(`- Ensure change has deltas in specs/: Gherkin rules tagged @added, @modified or @removed in specs/<capability>/${SPEC_FILE_NAME}`);
+      bullets.push('- Each @added or @modified rule MUST include at least one Scenario: with steps');
+      bullets.push('- Give rules without an ID their ID: openspec ids assign <id>');
       bullets.push('- Debug parsed deltas: openspec change show <id> --json --deltas-only');
     }
     console.error('Next steps:');

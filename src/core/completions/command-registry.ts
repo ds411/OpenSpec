@@ -422,6 +422,57 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
     ],
   },
   {
+    name: 'ids',
+    description: 'Give requirements their IDs',
+    flags: [],
+    subcommands: [
+      {
+        name: 'assign',
+        description: 'Give an ID to every requirement that has none',
+        acceptsPositional: true,
+        positionalType: 'change-id',
+        positionals: [{ name: 'target', type: 'change-id', optional: true }],
+        flags: [
+          {
+            name: 'dry-run',
+            description: 'Show the IDs without writing them',
+          },
+          COMMON_FLAGS.json,
+          COMMON_FLAGS.store,
+        ],
+      },
+      {
+        name: 'next',
+        description: 'Take the next free IDs from the counter',
+        flags: [
+          {
+            name: 'count',
+            description: 'How many IDs to take',
+            takesValue: true,
+          },
+          COMMON_FLAGS.json,
+          COMMON_FLAGS.store,
+        ],
+      },
+    ],
+  },
+  {
+    name: 'convert-specs',
+    description: 'Convert markdown specs to Gherkin feature files with requirement IDs',
+    flags: [
+      {
+        name: 'dry-run',
+        description: 'Show what would change without writing files',
+      },
+      {
+        name: 'keep',
+        description: 'Keep the markdown files after conversion',
+      },
+      COMMON_FLAGS.json,
+      COMMON_FLAGS.store,
+    ],
+  },
+  {
     name: 'doctor',
     description: 'Report relationship health for the resolved OpenSpec root',
     flags: [

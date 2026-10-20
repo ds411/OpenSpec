@@ -11,7 +11,7 @@ The workflow drafts four artifacts:
 | Artifact | File | Purpose |
 |---|---|---|
 | [`proposal`](#proposalmd) | `proposal.md` | Why the change is needed |
-| [`specs`](#delta-specs-specmd) | `specs/<capability-path>/spec.md`, one per capability | What behavior changes |
+| [`specs`](#delta-specs-specfeature) | `specs/<capability-path>/spec.feature`, one per capability | What behavior changes |
 | [`design`](#designmd) | `design.md` | How to build it |
 | [`tasks`](#tasksmd) | `tasks.md` | The implementation checklist |
 
@@ -40,7 +40,7 @@ openspec/changes/add-user-auth/
 ├── proposal.md
 ├── specs/
 │   └── user-auth/
-│       └── spec.md     one delta spec per capability
+│       └── spec.feature  one delta spec per capability
 ├── design.md
 └── tasks.md
 ```
@@ -72,7 +72,7 @@ The template the agent receives as the output format ([templates/proposal.md](ht
      implementation tasks or proposal sections. Avoid broad catch-all names. Use
      kebab-case for path segments you introduce (e.g., user-auth or identity/user-auth)
      that follow the project's existing spec organization. Each creates
-     specs/<capability-path>/spec.md. -->
+     specs/<capability-path>/spec.feature. -->
 - `<capability-path>`: <brief description of what this capability covers>
 
 ### Modified Capabilities
@@ -101,7 +101,7 @@ Sections:
 - **Why**: 1-2 sentences on the problem or opportunity. What problem does this solve? Why now?
 - **What Changes**: Bullet list of changes. Be specific about new capabilities, modifications, or removals. Mark breaking changes with **BREAKING**.
 - **Capabilities**: Identify which specs will be created or modified:
-  - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<capability-path>/spec.md`. Name each capability for a durable system behavior (for example, `user-auth`), not the work in this change (for example, `add-login-endpoint`). Choose a cohesive boundary that can own related requirements as the system evolves; avoid broad catch-all capabilities. Use kebab-case for path segments you introduce (e.g., `user-auth` or `identity/user-auth`) and follow the project's existing spec organization.
+  - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<capability-path>/spec.feature`. Name each capability for a durable system behavior (for example, `user-auth`), not the work in this change (for example, `add-login-endpoint`). Choose a cohesive boundary that can own related requirements as the system evolves; avoid broad catch-all capabilities. Use kebab-case for path segments you introduce (e.g., `user-auth` or `identity/user-auth`) and follow the project's existing spec organization.
   - **Modified Capabilities**: List existing capabilities whose REQUIREMENTS are changing. Only include if spec-level behavior changes (not just implementation details). Each needs a delta spec file. Use the exact existing path under `openspec/specs/`. Leave empty if no requirement changes.
 - **Impact**: Affected code, APIs, dependencies, or systems.
 
@@ -135,30 +135,28 @@ implementation details belong in design.md.
 This is the foundation - specs, design, and tasks all build on this.
 ```
 
-## Delta specs (spec.md)
+## Delta specs (spec.feature)
 
 Defines what behavior changes, with one delta spec per capability the proposal lists.
 
-Each delta spec is the `spec.md` inside its capability folder. `openspec validate` and `openspec archive` reject delta sections written in any other file under `specs/`, such as `specs/user-auth.md`, because archive never merges them.
+Each delta spec is the `spec.feature` inside its capability folder: a Gherkin feature file whose rules each carry one operation tag (`@added`, `@modified` or `@removed`). `openspec validate` and `openspec archive` reject rules written in any other file under `specs/`, such as `specs/user-auth.feature`, because archive never merges them. A markdown delta in the old `## ADDED Requirements` format is reported too; `openspec convert-specs` converts it.
 
 ### Structure
 
-The template the agent receives as the output format ([templates/spec.md](https://github.com/Fission-AI/OpenSpec/blob/main/schemas/spec-driven/templates/spec.md)):
+The template the agent receives as the output format ([templates/spec.feature](https://github.com/ds411/OpenSpec/blob/main/schemas/spec-driven/templates/spec.feature)):
 
-```md
-# Spec Delta
+```gherkin
+Feature: <!-- capability name -->
+  <!-- New capabilities only: one or two sentences (50+ characters) on what this capability is for. Delete this line for an existing capability. -->
 
-## Purpose
-<!-- New capabilities only: one or two sentences (50+ characters) on what this capability is for. Delete this section for an existing capability. -->
+  @added
+  Rule: <!-- requirement name -->
+    <!-- requirement statement, with SHALL or MUST -->
 
-## ADDED Requirements
-
-### Requirement: <!-- requirement name -->
-<!-- requirement text -->
-
-#### Scenario: <!-- scenario name -->
-- **WHEN** <!-- condition -->
-- **THEN** <!-- expected outcome -->
+    Scenario: <!-- scenario name -->
+      Given <!-- context -->
+      When <!-- condition -->
+      Then <!-- expected outcome -->
 ```
 
 ### Instructions
@@ -188,13 +186,13 @@ visible behavior, it likely does not belong in the spec.
 Create one spec file per capability listed in the proposal's Capabilities section.
 `<capability-path>` is the spec directory relative to `specs/` (for example,
 `user-auth` or `identity/user-auth`). Preserve the full path:
-- New capabilities: use the exact path from the proposal at `specs/<capability-path>/spec.md`. Any path segment newly introduced in the proposal must be kebab-case. Follow the project's existing organization; do not add a new domain level when the project uses a flat layout.
-- Modified capabilities: use the exact existing path from `openspec/specs/<capability-path>/` when creating the delta at `specs/<capability-path>/spec.md`. Run `openspec list --specs` to confirm that path before writing the delta, appending `--store "<id>"` only for a registered standalone store - a mistyped or invented path targets a capability that does not exist rather than the one you meant. Do not move or rename the capability.
+- New capabilities: use the exact path from the proposal at `specs/<capability-path>/spec.feature`. Any path segment newly introduced in the proposal must be kebab-case. Follow the project's existing organization; do not add a new domain level when the project uses a flat layout.
+- Modified capabilities: use the exact existing path from `openspec/specs/<capability-path>/` when creating the delta at `specs/<capability-path>/spec.feature`. Run `openspec list --specs` to confirm that path before writing the delta, appending `--store "<id>"` only for a registered standalone store - a mistyped or invented path targets a capability that does not exist rather than the one you meant. Do not move or rename the capability.
 
 Write the spec files one at a time, so the user sees progress and an
 interrupted run keeps the files it already wrote:
 - Before writing anything, compare the capabilities the proposal lists
-  with the `specs/<capability-path>/spec.md` files that already exist,
+  with the `specs/<capability-path>/spec.feature` files that already exist,
   and start with the first capability that has no file. Do not rewrite
   an existing file unless the user asks you to.
 - Before each file, say in one line which capability you are writing.
@@ -207,29 +205,52 @@ sets `skip_specs: true` (no spec-level behavior change) - `openspec validate`
 rejects a zero-delta change without that marker. If the proposal lists no
 capabilities and `skip_specs` is not set, revisit the proposal first.
 
-Delta operations (use ## headers):
-- **ADDED Requirements**: New capabilities
-- **MODIFIED Requirements**: Changed behavior - MUST include full updated content
-- **REMOVED Requirements**: Deprecated features - MUST include **Reason** and **Migration**
-- **RENAMED Requirements**: Name changes only - use FROM:/TO: format
+Format (Gherkin):
+- The file starts with `Feature: <capability name>`.
+- Each requirement is a `Rule: <name>` block. The text under `Rule:` is
+  the requirement statement. Use SHALL/MUST (avoid should/may).
+- Each scenario is a `Scenario: <name>` inside its rule, with `Given`,
+  `When` and `Then` steps; `And` and `But` continue the step above.
+  Every requirement MUST have at least one scenario, and every scenario
+  needs a `Then` step.
+- Put multi-line step content (a list, JSON, an example output) in a doc
+  string: the lines between two `"""` lines under the step.
+- A statement line must not start with `@`, `#`, or a keyword and colon
+  (`Scenario:`, `Rule:`, `Example:`, `Background:`): Gherkin reads those
+  as structure. Start such a line with a backslash.
+- Each requirement has a stable ID tag, such as `@REQ-0042`, on the line
+  above `Rule:`. Code and tests point to requirements by this ID. Never
+  invent, change or reuse an ID.
 
-Format requirements:
-- Each requirement: `### Requirement: <name>` followed by description
-- Use SHALL/MUST for normative requirements (avoid should/may)
-- Each scenario: `#### Scenario: <name>` with WHEN/THEN format
-- **CRITICAL**: Scenarios MUST use exactly 4 hashtags (`####`). Using 3 hashtags or bullets will fail silently.
-- Every requirement MUST have at least one scenario.
-- Keep each requirement's description (the text between `### Requirement:` and its first scenario) to 500 characters or fewer. `openspec validate` flags longer descriptions in ADDED requirements and in the main spec. This is a warning: normal validation still passes, but `openspec validate --strict` fails on it. When writing a new requirement, state one behavior per requirement: move examples and edge cases into scenarios, and split a requirement that covers several behaviors into separate `### Requirement:` blocks, each with its own scenarios. Under MODIFIED, keep the existing requirement block whole; never split, trim or rewrite existing text just to meet the length. Split an existing long requirement only when the user asks for it, in a change made for that purpose: under MODIFIED, keep its header and every scenario and cut its description down to one behavior without changing its meaning, then add each behavior you removed as its own ADDED requirement with its own scenarios.
+Delta operations (one tag per rule, on the line above `Rule:`):
+- `@added`: a new requirement. Do not write an ID; `openspec ids assign` gives one.
+- `@modified`: changed behavior. Keep the requirement's ID tag. The rule
+  replaces the whole requirement at archive, so it MUST hold the full
+  updated statement and every scenario that still applies. To rename a
+  requirement, change the name after `Rule:` and keep the ID.
+- `@removed`: a requirement that goes away. Keep its ID tag, and write
+  the reason and the migration path as the rule's statement.
+- In a `@modified` rule, tag a scenario `@removed` only to drop it on
+  purpose. `openspec validate` reports any other scenario that the main
+  spec has and the rule leaves out.
 
-New capabilities only: the delta spec's first section is `## Purpose` -
-one or two sentences (50+ characters, or `openspec validate --strict`
-reports it as too brief) describing what the capability is for. Archive
-copies it into the main spec it creates; without it the new main spec is
-left with a `TBD ... Update Purpose after archive` placeholder to fill in
-by hand. Do NOT add `## Purpose` to a delta for an existing capability -
-that spec already has one and the delta's is ignored. To change an
-existing capability's Purpose - including a leftover `TBD` placeholder -
-edit `<planningHome.root>/openspec/specs/<capability-path>/spec.md`
+After you write each delta file, run `openspec ids assign "<change-name>"`
+(append `--store "<id>"` only for a registered standalone store). It
+gives every `@added` rule its ID and reports a `@modified` or `@removed`
+rule that has none.
+
+Keep each requirement's statement (the text between `Rule:` and its first scenario) to 500 characters or fewer. `openspec validate` flags longer statements in `@added` rules and in the main spec. This is a warning: normal validation still passes, but `openspec validate --strict` fails on it. When writing a new requirement, state one behavior per requirement: move examples and edge cases into scenarios, and split a requirement that covers several behaviors into separate rules, each with its own scenarios. In a `@modified` rule, keep the existing requirement whole; never split, trim or rewrite existing text just to meet the length. Split an existing long requirement only when the user asks for it, in a change made for that purpose: in a `@modified` rule, keep its ID and every scenario and cut its statement down to one behavior without changing its meaning, then add each behavior you removed as its own `@added` rule with its own scenarios.
+
+New capabilities only: write one or two sentences (50+ characters, or
+`openspec validate --strict` reports it as too brief) under the
+`Feature:` line on what the capability is for. This feature description
+is the capability's Purpose. Archive copies it into the main spec it
+creates; without it the new main spec is left with a `TBD ... Update
+Purpose after archive` placeholder to fill in by hand. Leave the feature
+description empty in a delta for an existing capability - that spec
+already has a Purpose and the delta's is ignored. To change an existing
+capability's Purpose - including a leftover `TBD` placeholder -
+edit `<planningHome.root>/openspec/specs/<capability-path>/spec.feature`
 directly. `planningHome.root` comes from the `openspec instructions ...
 --json` response. Always use it rather than a repo-relative path: it
 resolves to the store whenever the change lives in one - whether that
@@ -237,37 +258,45 @@ came from `--store`, a project `store:` pointer, or a global default
 store - and to the current repository otherwise. Do not try to work out
 which case applies; the field already has.
 
-MODIFIED requirements workflow:
-1. Locate the existing requirement in `<planningHome.root>/openspec/specs/<capability-path>/spec.md` (the same store-aware root as above)
-2. Copy the ENTIRE requirement block (from `### Requirement:` through all scenarios)
-3. Paste under `## MODIFIED Requirements` and edit to reflect new behavior
-4. Ensure header text matches exactly (whitespace-insensitive)
+Modified requirements workflow:
+1. Locate the requirement in `<planningHome.root>/openspec/specs/<capability-path>/spec.feature` (the same store-aware root as above). `openspec show "<spec-id>" --type spec --json` lists each requirement with its ID.
+2. Copy the ENTIRE rule: its tag line, the `Rule:` line, the statement and all scenarios.
+3. Paste it into the delta, add `@modified` to the tag line, and edit it to reflect the new behavior. Do not change the ID.
 
-Common pitfall: Using MODIFIED with partial content loses detail at archive time.
-If adding new concerns without changing existing behavior, use ADDED instead.
+Common pitfall: a `@modified` rule with partial content loses detail at archive time.
+If adding new concerns without changing existing behavior, use `@added` instead.
 
-Example (a new capability, so its first section is `## Purpose`):
+Example (a new capability, so the feature has a description):
+```gherkin
+Feature: Data export
+  Lets users take their data out of the product in a portable format.
+
+  @added
+  Rule: User can export data
+    The system SHALL allow users to export their data in CSV format.
+
+    Scenario: Successful export
+      Given a signed-in user
+      When the user clicks "Export"
+      Then the system downloads a CSV file with all user data
 ```
-# Spec Delta
 
-## Purpose
+Example (an existing capability):
+```gherkin
+Feature: Data export
 
-Lets users take their data out of the product in a portable format.
+  @modified @REQ-0012
+  Rule: Export file format
+    The system SHALL export data as CSV or JSON, as the user selects.
 
-## ADDED Requirements
+    Scenario: JSON export
+      When the user selects JSON and clicks "Export"
+      Then the system downloads a JSON file with all user data
 
-### Requirement: User can export data
-The system SHALL allow users to export their data in CSV format.
-
-#### Scenario: Successful export
-- **WHEN** user clicks "Export" button
-- **THEN** system downloads a CSV file with all user data
-
-## REMOVED Requirements
-
-### Requirement: Legacy export
-**Reason**: Replaced by new export system
-**Migration**: Use new export endpoint at /api/v2/export
+  @removed @REQ-0007
+  Rule: Legacy export
+    Reason: Replaced by the new export system.
+    Migration: Use the export endpoint at /api/v2/export.
 ```
 
 Specs should be testable - each scenario is a potential test case.
@@ -454,6 +483,16 @@ The instruction sent to the agent when implementation starts (from [schema.yaml]
 ```md
 Read context files, work through pending tasks, mark complete as you go.
 Pause if you hit blockers or need clarification.
+
+Trace the code to its requirements. Where code implements a requirement
+from this change's specs, add a comment that holds `@trace` and the
+requirement's ID (the `@REQ-...` tag above its `Rule:`), in the file's
+comment syntax: for example `// @trace <ID>` or `# @trace <ID>`, with
+`<ID>` replaced. Put it on the function, class or block that carries the
+behavior, and on each test that checks one of the requirement's
+scenarios. One comment can name more than one ID. Use only IDs that a
+spec has; if an `@added` rule has no ID yet, run `openspec ids assign`
+for the change first.
 ```
 
 ## schema.yaml
@@ -473,9 +512,9 @@ artifacts:
     requires: []
 
   - id: specs
-    generates: "specs/**/*.md"
-    description: Detailed specifications for the change
-    template: spec.md
+    generates: "specs/**/*.feature"
+    description: Detailed specifications for the change, as Gherkin feature files
+    template: spec.feature
     # instruction: shown in full under Delta specs above
     requires:
       - proposal

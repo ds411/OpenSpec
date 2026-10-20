@@ -114,10 +114,10 @@ describe('CompletionProvider', () => {
 
       // Create some specs
       await fs.mkdir(path.join(specsDir, 'spec-1'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'spec-1', 'spec.md'), '# Spec 1');
+      await fs.writeFile(path.join(specsDir, 'spec-1', 'spec.feature'), 'Feature: Spec 1');
 
       await fs.mkdir(path.join(specsDir, 'spec-2'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'spec-2', 'spec.md'), '# Spec 2');
+      await fs.writeFile(path.join(specsDir, 'spec-2', 'spec.feature'), 'Feature: Spec 2');
 
       const specIds = await provider.getSpecIds();
       expect(specIds).toEqual(['spec-1', 'spec-2']);
@@ -128,7 +128,7 @@ describe('CompletionProvider', () => {
       await fs.mkdir(specsDir, { recursive: true });
 
       await fs.mkdir(path.join(specsDir, 'spec-1'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'spec-1', 'spec.md'), '# Spec 1');
+      await fs.writeFile(path.join(specsDir, 'spec-1', 'spec.feature'), 'Feature: Spec 1');
 
       // First call
       const firstResult = await provider.getSpecIds();
@@ -136,7 +136,7 @@ describe('CompletionProvider', () => {
 
       // Add another spec
       await fs.mkdir(path.join(specsDir, 'spec-2'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'spec-2', 'spec.md'), '# Spec 2');
+      await fs.writeFile(path.join(specsDir, 'spec-2', 'spec.feature'), 'Feature: Spec 2');
 
       // Second call should return cached result
       const secondResult = await provider.getSpecIds();
@@ -150,14 +150,14 @@ describe('CompletionProvider', () => {
       await fs.mkdir(specsDir, { recursive: true });
 
       await fs.mkdir(path.join(specsDir, 'spec-1'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'spec-1', 'spec.md'), '# Spec 1');
+      await fs.writeFile(path.join(specsDir, 'spec-1', 'spec.feature'), 'Feature: Spec 1');
 
       const firstResult = await shortTTLProvider.getSpecIds();
       expect(firstResult).toEqual(['spec-1']);
 
       // Add another spec
       await fs.mkdir(path.join(specsDir, 'spec-2'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'spec-2', 'spec.md'), '# Spec 2');
+      await fs.writeFile(path.join(specsDir, 'spec-2', 'spec.feature'), 'Feature: Spec 2');
 
       // Wait for cache to expire
       await new Promise(resolve => setTimeout(resolve, 60));
@@ -180,7 +180,7 @@ describe('CompletionProvider', () => {
 
       // Create a spec
       await fs.mkdir(path.join(specsDir, 'my-spec'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'my-spec', 'spec.md'), '# Spec');
+      await fs.writeFile(path.join(specsDir, 'my-spec', 'spec.feature'), 'Feature: Spec');
 
       const result = await provider.getAllIds();
       expect(result).toEqual({

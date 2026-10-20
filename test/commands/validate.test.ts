@@ -15,48 +15,49 @@ describe('top-level validate command', () => {
 
     // Create a valid spec
     const specContent = [
-      '## Purpose',
-      'This spec ensures the validation harness exercises a deterministic alpha module for automated tests.',
+      'Feature: Alpha',
+      '  This spec ensures the validation harness exercises a deterministic alpha module for automated tests.',
       '',
-      '## Requirements',
+      '  @REQ-0001',
+      '  Rule: Alpha module SHALL produce deterministic output',
+      '    The alpha module SHALL produce a deterministic response for validation.',
       '',
-      '### Requirement: Alpha module SHALL produce deterministic output',
-      'The alpha module SHALL produce a deterministic response for validation.',
-      '',
-      '#### Scenario: Deterministic alpha run',
-      '- **GIVEN** a configured alpha module',
-      '- **WHEN** the module runs the default flow',
-      '- **THEN** the output matches the expected fixture result',
+      '    Scenario: Deterministic alpha run',
+      '      Given a configured alpha module',
+      '      When the module runs the default flow',
+      '      Then the output matches the expected fixture result',
     ].join('\n');
     await fs.mkdir(path.join(specsDir, 'alpha'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'alpha', 'spec.md'), specContent, 'utf-8');
+    await fs.writeFile(path.join(specsDir, 'alpha', 'spec.feature'), specContent, 'utf-8');
 
     // Create a simple change with bullets (parser supports this)
     const changeContent = `# Test Change\n\n## Why\nBecause reasons that are sufficiently long for validation.\n\n## What Changes\n- **alpha:** Add something`;
     await fs.mkdir(path.join(changesDir, 'c1'), { recursive: true });
     await fs.writeFile(path.join(changesDir, 'c1', 'proposal.md'), changeContent, 'utf-8');
     const deltaContent = [
-      '## ADDED Requirements',
-      '### Requirement: Validator SHALL support alpha change deltas',
-      'The validator SHALL accept deltas provided by the test harness.',
+      'Feature: Alpha',
       '',
-      '#### Scenario: Apply alpha delta',
-      '- **GIVEN** the test change delta',
-      '- **WHEN** openspec validate runs',
-      '- **THEN** the validator reports the change as valid',
+      '  @added @REQ-0002',
+      '  Rule: Validator SHALL support alpha change deltas',
+      '    The validator SHALL accept deltas provided by the test harness.',
+      '',
+      '    Scenario: Apply alpha delta',
+      '      Given the test change delta',
+      '      When openspec validate runs',
+      '      Then the validator reports the change as valid',
     ].join('\n');
     const c1DeltaDir = path.join(changesDir, 'c1', 'specs', 'alpha');
     await fs.mkdir(c1DeltaDir, { recursive: true });
-    await fs.writeFile(path.join(c1DeltaDir, 'spec.md'), deltaContent, 'utf-8');
+    await fs.writeFile(path.join(c1DeltaDir, 'spec.feature'), deltaContent, 'utf-8');
 
     // Duplicate name for ambiguity test
     await fs.mkdir(path.join(changesDir, 'dup'), { recursive: true });
     await fs.writeFile(path.join(changesDir, 'dup', 'proposal.md'), changeContent, 'utf-8');
     const dupDeltaDir = path.join(changesDir, 'dup', 'specs', 'dup');
     await fs.mkdir(dupDeltaDir, { recursive: true });
-    await fs.writeFile(path.join(dupDeltaDir, 'spec.md'), deltaContent, 'utf-8');
+    await fs.writeFile(path.join(dupDeltaDir, 'spec.feature'), deltaContent, 'utf-8');
     await fs.mkdir(path.join(specsDir, 'dup'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'dup', 'spec.md'), specContent, 'utf-8');
+    await fs.writeFile(path.join(specsDir, 'dup', 'spec.feature'), specContent, 'utf-8');
   });
 
   afterEach(async () => {
@@ -155,19 +156,21 @@ describe('top-level validate command', () => {
     await fs.writeFile(path.join(changesDir, changeId, 'proposal.md'), crlfContent, 'utf-8');
 
     const deltaContent = toCrlf([
-      '## ADDED Requirements',
-      '### Requirement: Parser SHALL accept CRLF change proposals',
-      'The parser SHALL accept CRLF change proposals without manual edits.',
+      'Feature: Alpha',
       '',
-      '#### Scenario: Validate CRLF change',
-      '- **GIVEN** a change proposal saved with CRLF line endings',
-      '- **WHEN** a developer runs openspec validate on the proposal',
-      '- **THEN** validation succeeds without section errors',
+      '  @added @REQ-0005',
+      '  Rule: Parser SHALL accept CRLF change proposals',
+      '    The parser SHALL accept CRLF change proposals without manual edits.',
+      '',
+      '    Scenario: Validate CRLF change',
+      '      Given a change proposal saved with CRLF line endings',
+      '      When a developer runs openspec validate on the proposal',
+      '      Then validation succeeds without section errors',
     ]);
 
     const deltaDir = path.join(changesDir, changeId, 'specs', 'alpha');
     await fs.mkdir(deltaDir, { recursive: true });
-    await fs.writeFile(path.join(deltaDir, 'spec.md'), deltaContent, 'utf-8');
+    await fs.writeFile(path.join(deltaDir, 'spec.feature'), deltaContent, 'utf-8');
 
     const result = await runCLI(['validate', changeId], { cwd: testDir });
     expect(result.exitCode).toBe(0);
@@ -176,14 +179,16 @@ describe('top-level validate command', () => {
   // #1182 — validate resolves a change by directory existence (matching
   // status/instructions), not by requiring proposal.md.
   const validDelta = [
-    '## ADDED Requirements',
-    '### Requirement: Scaffolded change SHALL validate without a proposal',
-    'The change SHALL validate by directory existence without a proposal file.',
+    'Feature: Alpha',
     '',
-    '#### Scenario: Validate scaffolded change',
-    '- **GIVEN** a change directory with no proposal.md',
-    '- **WHEN** openspec validate runs',
-    '- **THEN** the change resolves and its deltas are validated',
+    '  @added @REQ-0003',
+    '  Rule: Scaffolded change SHALL validate without a proposal',
+    '    The change SHALL validate by directory existence without a proposal file.',
+    '',
+    '    Scenario: Validate scaffolded change',
+    '      Given a change directory with no proposal.md',
+    '      When openspec validate runs',
+    '      Then the change resolves and its deltas are validated',
   ].join('\n');
 
   it('resolves and validates a scaffolded change without proposal.md (#1182)', async () => {
@@ -191,7 +196,7 @@ describe('top-level validate command', () => {
     const deltaDir = path.join(changeDir, 'specs', 'alpha');
     await fs.mkdir(deltaDir, { recursive: true });
     await fs.writeFile(path.join(changeDir, '.openspec.yaml'), 'schema: spec-driven\n', 'utf-8');
-    await fs.writeFile(path.join(deltaDir, 'spec.md'), validDelta, 'utf-8');
+    await fs.writeFile(path.join(deltaDir, 'spec.feature'), validDelta, 'utf-8');
 
     const result = await runCLI(['validate', 'scaffolded'], { cwd: testDir });
     expect(result.stderr).not.toContain('Unknown item');
@@ -216,7 +221,7 @@ describe('top-level validate command', () => {
     await fs.mkdir(deltaDir, { recursive: true });
     try {
       await fs.writeFile(path.join(isoChanges, 'only', '.openspec.yaml'), 'schema: spec-driven\n', 'utf-8');
-      await fs.writeFile(path.join(deltaDir, 'spec.md'), validDelta, 'utf-8');
+      await fs.writeFile(path.join(deltaDir, 'spec.feature'), validDelta, 'utf-8');
 
       const result = await runCLI(['validate', '--all'], { cwd: isoRoot });
       expect(result.stdout + result.stderr).not.toContain('No items found to validate');

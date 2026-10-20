@@ -13,7 +13,7 @@ Archive multiple completed changes in a single operation.
 
 This skill allows you to batch-archive changes, handling spec conflicts intelligently by checking the codebase to determine what's actually implemented.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`, `ids assign`, `ids next`, `convert-specs`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
 
 **Project check:** These steps expect a project that already uses OpenSpec. Before the first step that writes anything (`new change`, `archive`, `sync specs`, or authoring an artifact file), confirm the project has a root: run `openspec list --json` (with `--store <id>` when a store is selected, since the store is then the root) and read `root`. A root object means the project is set up. `"root": null` means it is not - there is no `openspec/` directory here, and a write such as `openspec new change` would create one as a side effect. The command also exits non-zero, which is that answer rather than a broken CLI, so read the JSON instead of retrying or working around it.
 
@@ -95,7 +95,7 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
    c. **Delta specs** - Check `artifactPaths.specs.existingOutputPaths` from status JSON
       - List which capability specs exist
-      - For each, extract requirement names (lines matching `### Requirement: <name>`)
+      - For each, extract its requirements: each `Rule: <name>` with its ID tag (such as `@REQ-0042`) and operation tag (`@added`, `@modified` or `@removed`)
       - Treat this list as the only delta-spec source. If the `specs` entry is
         missing or the list is empty, perform no spec sync or specs-instruction
         lookup for that change; do not infer deltas from unrelated artifacts.
@@ -127,7 +127,7 @@ In both branches, never create the root as a side effect: do not run `openspec i
    a. **Read the delta specs** from each conflicting change to understand what each claims to add/modify
 
    b. **Search the codebase** for implementation evidence:
-      - Look for code implementing requirements from each delta spec
+      - Look for code implementing requirements from each delta spec, starting with `@trace` comments that name each requirement's ID
       - Check for related files, functions, or tests
 
    c. **Determine resolution**:
@@ -218,12 +218,11 @@ In both branches, never create the root as a side effect: do not run `openspec i
       - If a change has no included delta specs, do not run the sync workflow for it.
 
    b. **Verify included delta specs before moving changeRoot**:
-      - Re-run the comparison only for delta specs in `includedDeltas` against main spec at `<planningHome.root>/openspec/specs/<capability-path>/spec.md` (use the store-aware `planningHome.root` from step 3 status JSON, not a hardcoded repo path).
+      - Re-run the comparison only for delta specs in `includedDeltas` against main spec at `<planningHome.root>/openspec/specs/<capability-path>/spec.feature` (use the store-aware `planningHome.root` from step 3 status JSON, not a hardcoded repo path).
       - Verify that main specs are updated:
-        - ADDED requirements present
-        - MODIFIED requirements carrying scenario and description changes named in the delta, with their other scenarios intact
-        - REMOVED requirements gone — and where this sync retired a capability (removed its last requirement, leaving `## Requirements` empty), its main spec deleted rather than left empty.
-        - RENAMED requirements present under the new name and absent under the old one
+        - `@added` requirements present under their IDs
+        - `@modified` requirements carrying the name, statement and scenario changes named in the delta, with their other scenarios intact
+        - `@removed` requirements gone — and where this sync retired a capability (removed its last rule), its main spec deleted rather than left empty.
       - Do not verify delta specs in `excludedDeltas`; they are intentionally left unsynced.
       - If sync failed or any capability does not match verification, report what differs and fail/skip moving that change's `changeRoot` — do not archive that change. `changeRoot` remains intact.
 
@@ -280,7 +279,7 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
 Example 1: Only one implemented
 ```text
-Conflict: <planningHome.root>/openspec/specs/auth/spec.md touched by [add-oauth, add-jwt]
+Conflict: <planningHome.root>/openspec/specs/auth/spec.feature touched by [add-oauth, add-jwt]
 
 Checking add-oauth:
 - Delta adds "OAuth Provider Integration" requirement
@@ -295,7 +294,7 @@ Resolution: Only add-oauth is implemented. Will sync add-oauth specs only.
 
 Example 2: Both implemented
 ```text
-Conflict: <planningHome.root>/openspec/specs/api/spec.md touched by [add-rest-api, add-graphql]
+Conflict: <planningHome.root>/openspec/specs/api/spec.feature touched by [add-rest-api, add-graphql]
 
 Checking add-rest-api (created 2026-01-10):
 - Delta adds "REST Endpoints" requirement
@@ -363,7 +362,7 @@ No active changes found. Create a new change to get started.
 - If sync is requested, run the `openspec-sync-specs` workflow inline (agent-driven) for each change with included delta specs
 - Carry the per-delta `includedDeltas` and `excludedDeltas` decisions into execution; sync and verify only included deltas
 - Report every excluded delta as `sync skipped` without treating the archive itself as skipped
-- Never archive a change while a spec sync is still in flight — run the sync inline and verify main specs at `<planningHome.root>/openspec/specs/<capability-path>/spec.md` before moving `changeRoot`
+- Never archive a change while a spec sync is still in flight — run the sync inline and verify main specs at `<planningHome.root>/openspec/specs/<capability-path>/spec.feature` before moving `changeRoot`
 - Fetch archive inputs once per selected root before spec inspection or moves
 - Fetch all required specs-rule snapshots before the batch's first main-spec write or move
 - A failed archive-inputs lookup never blocks the batch; it proceeds with no context or guidance

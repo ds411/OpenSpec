@@ -13,11 +13,11 @@ const itWithSymlinks = it.skipIf(process.platform === 'win32');
 
 /**
  * A project may keep its main specs beside the product documentation they
- * belong to and link `openspec/specs/<capability>/spec.md` to them, so the
+ * belong to and link `openspec/specs/<capability>/spec.feature` to them, so the
  * docs and OpenSpec read and write the same bytes (#2100). The merge has to
  * write through such a link, and still refuse one that leaves the project.
  */
-describe('a spec.md linked to a file elsewhere in the project', () => {
+describe('a spec.feature linked to a file elsewhere in the project', () => {
   let tempDir: string;
   let projectDir: string;
   let changeDir: string;
@@ -26,31 +26,29 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
   let linkedSpec: string;
 
   const DELTA = [
-    '## ADDED Requirements',
+    'Feature: Login',
     '',
-    '### Requirement: Second factor',
-    'The system SHALL require a second factor.',
+    '  @added @REQ-0002',
+    '  Rule: Second factor',
+    '    The system SHALL require a second factor.',
     '',
-    '#### Scenario: Prompted',
-    '- **WHEN** a user signs in',
-    '- **THEN** a second factor is requested',
+    '    Scenario: Prompted',
+    '      When a user signs in',
+    '      Then a second factor is requested',
     '',
   ].join('\n');
 
   const MAIN_SPEC = [
-    '# login Specification',
+    'Feature: Login',
+    '  Users sign in with their credentials to reach their account.',
     '',
-    '## Purpose',
-    'Users sign in with their credentials to reach their account.',
+    '  @REQ-0001',
+    '  Rule: Sign in',
+    '    The system SHALL let a user sign in with valid credentials.',
     '',
-    '## Requirements',
-    '',
-    '### Requirement: Sign in',
-    'The system SHALL let a user sign in with valid credentials.',
-    '',
-    '#### Scenario: Valid credentials',
-    '- **WHEN** the user submits valid credentials',
-    '- **THEN** the user is signed in',
+    '    Scenario: Valid credentials',
+    '      When the user submits valid credentials',
+    '      Then the user is signed in',
     '',
   ].join('\n');
 
@@ -59,11 +57,11 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
     projectDir = path.join(tempDir, 'repo');
     changeDir = path.join(projectDir, 'openspec', 'changes', 'add-mfa');
     mainSpecsDir = path.join(projectDir, 'openspec', 'specs');
-    docsSpec = path.join(projectDir, 'docs', 'auth', 'specs', 'login.md');
-    linkedSpec = path.join(mainSpecsDir, 'login', 'spec.md');
+    docsSpec = path.join(projectDir, 'docs', 'auth', 'specs', 'login.feature');
+    linkedSpec = path.join(mainSpecsDir, 'login', 'spec.feature');
 
     await fs.mkdir(path.join(changeDir, 'specs', 'login'), { recursive: true });
-    await fs.writeFile(path.join(changeDir, 'specs', 'login', 'spec.md'), DELTA);
+    await fs.writeFile(path.join(changeDir, 'specs', 'login', 'spec.feature'), DELTA);
     await fs.mkdir(path.dirname(docsSpec), { recursive: true });
     await fs.writeFile(docsSpec, MAIN_SPEC);
     await fs.mkdir(path.dirname(linkedSpec), { recursive: true });
@@ -94,7 +92,7 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
     // Rebased onto the canonical specs root, so /var and /private/var agree.
     const canonicalLinkedSpec = path.join(
       await fs.realpath(path.dirname(linkedSpec)),
-      'spec.md'
+      'spec.feature'
     );
     expect(update.target).toBe(canonicalLinkedSpec);
     expect(update.exists).toBe(true);
@@ -112,7 +110,7 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
   });
 
   itWithSymlinks('refuses a link that leaves the project', async () => {
-    const outsideSpec = path.join(tempDir, 'outside.md');
+    const outsideSpec = path.join(tempDir, 'outside.feature');
     await fs.writeFile(outsideSpec, MAIN_SPEC);
     await fs.symlink(outsideSpec, linkedSpec);
 
@@ -131,7 +129,7 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
 
       // The link now points out of the project, after the path was resolved and
       // the merge was built. The recheck before the write has to catch it.
-      const outsideSpec = path.join(tempDir, 'outside.md');
+      const outsideSpec = path.join(tempDir, 'outside.feature');
       await fs.writeFile(outsideSpec, 'outside sentinel');
       await fs.rm(linkedSpec);
       await fs.symlink(outsideSpec, linkedSpec);
@@ -149,7 +147,7 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
       await fs.symlink(path.relative(path.dirname(linkedSpec), docsSpec), linkedSpec);
       const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
 
-      const outsideSpec = path.join(tempDir, 'outside.md');
+      const outsideSpec = path.join(tempDir, 'outside.feature');
       await fs.writeFile(outsideSpec, 'outside sentinel');
       await fs.rm(linkedSpec);
       await fs.symlink(outsideSpec, linkedSpec);
@@ -167,7 +165,7 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
       const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
       const built = await buildUpdatedSpec(update, 'add-mfa', { silent: true });
 
-      const outsideSpec = path.join(tempDir, 'outside.md');
+      const outsideSpec = path.join(tempDir, 'outside.feature');
       await fs.writeFile(outsideSpec, 'outside sentinel');
 
       // `beforeMutate` runs after the containment check, so it is the one
@@ -194,11 +192,11 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
     async () => {
       // Not specific to the linked layout: the canonical file at the end of the
       // chain can be swapped for a link too, so the re-check has to catch that
-      // for a plain `openspec/specs/<capability>/spec.md` as well.
+      // for a plain `openspec/specs/<capability>/spec.feature` as well.
       await fs.writeFile(linkedSpec, MAIN_SPEC);
       const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
       const built = await buildUpdatedSpec(update, 'add-mfa', { silent: true });
-      const outsideSpec = path.join(tempDir, 'outside.md');
+      const outsideSpec = path.join(tempDir, 'outside.feature');
       await fs.writeFile(outsideSpec, 'outside sentinel');
 
       await expect(
@@ -217,10 +215,10 @@ describe('a spec.md linked to a file elsewhere in the project', () => {
 
   itWithSymlinks('merges through a linked delta spec inside the project', async () => {
     await fs.symlink(path.relative(path.dirname(linkedSpec), docsSpec), linkedSpec);
-    const sharedDelta = path.join(projectDir, 'docs', 'auth', 'deltas', 'login.md');
+    const sharedDelta = path.join(projectDir, 'docs', 'auth', 'deltas', 'login.feature');
     await fs.mkdir(path.dirname(sharedDelta), { recursive: true });
     await fs.writeFile(sharedDelta, DELTA);
-    const deltaPath = path.join(changeDir, 'specs', 'login', 'spec.md');
+    const deltaPath = path.join(changeDir, 'specs', 'login', 'spec.feature');
     await fs.rm(deltaPath);
     await fs.symlink(path.relative(path.dirname(deltaPath), sharedDelta), deltaPath);
 

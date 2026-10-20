@@ -508,23 +508,24 @@ artifacts:
       expect(templates).toEqual([
         'design.md',
         'proposal.md',
-        path.join('specs', 'spec.md'),
+        path.join('specs', 'spec.feature'),
         'tasks.md',
       ].sort());
 
       // The artifact a template produces is a document in its own right, so it
-      // opens with a title and a blank line, not a section header (#1138).
+      // opens with a title and a blank line, not a section header (#1138). A
+      // spec is a feature file, whose title is its \`Feature:\` line.
       const headings: Record<string, string> = {
         'design.md': '# Design',
         'proposal.md': '# Proposal',
-        [path.join('specs', 'spec.md')]: '# Spec Delta',
+        [path.join('specs', 'spec.feature')]: 'Feature: Example capability',
         'tasks.md': '# Tasks',
       };
       for (const template of templates) {
         const content = fs.readFileSync(path.join(templatesDir, template), 'utf-8');
         const [firstLine, secondLine] = content.replace(/\r\n?/g, '\n').split('\n');
         expect(firstLine).toBe(headings[template]);
-        expect(secondLine).toBe('');
+        if (template.endsWith('.md')) expect(secondLine).toBe('');
       }
     });
 
@@ -814,7 +815,7 @@ artifacts:
       expect(fs.existsSync(sentinelPath)).toBe(false);
       expect(fs.existsSync(path.join(schemaDir, 'schema.yaml'))).toBe(true);
       expect(fs.existsSync(path.join(schemaDir, 'templates', 'proposal.md'))).toBe(true);
-      expect(fs.existsSync(path.join(schemaDir, 'templates', 'specs', 'spec.md'))).toBe(true);
+      expect(fs.existsSync(path.join(schemaDir, 'templates', 'specs', 'spec.feature'))).toBe(true);
       expect(fs.existsSync(path.join(schemaDir, 'templates', 'design.md'))).toBe(true);
       expect(fs.existsSync(path.join(schemaDir, 'templates', 'tasks.md'))).toBe(true);
     });

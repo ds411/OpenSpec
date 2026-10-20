@@ -2,9 +2,9 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { getTaskProgressForChange, formatTaskStatus } from '../utils/task-progress.js';
 import { readFileSync, type Dirent } from 'fs';
-import { MarkdownParser } from './parsers/markdown-parser.js';
+import { parseSpecContent } from './gherkin/spec-model.js';
 import type { RootOutput } from './root-selection.js';
-import { discoverSpecFiles } from '../utils/spec-discovery.js';
+import { discoverLegacySpecFiles, discoverSpecFiles, legacySpecMessage } from '../utils/spec-discovery.js';
 import {
   describeNestedChange,
   findNestedChanges,
@@ -260,12 +260,23 @@ export class ListCommand {
       return;
     }
 
-    const discovered = await discoverSpecFiles(specsDir);
+    const [discovered, legacy] = await Promise.all([
+      discoverSpecFiles(specsDir),
+      discoverLegacySpecFiles(specsDir),
+    ]);
+    // Markdown specs from earlier versions are not read any more. Naming them
+    // keeps an unconverted project from looking as if it had no specs.
+    const warnings = legacy.map(({ id }) => ({
+      code: 'legacy_markdown_spec',
+      name: id,
+      message: legacySpecMessage(id),
+    }));
     if (discovered.length === 0) {
       if (json) {
-        console.log(JSON.stringify({ specs: [], ...(root ? { root } : {}) }, null, 2));
+        console.log(JSON.stringify({ specs: [], ...(warnings.length > 0 ? { warnings } : {}), ...(root ? { root } : {}) }, null, 2));
       } else {
         console.log('No specs found.');
+        this.printSpecWarnings(warnings);
       }
       return;
     }
@@ -275,8 +286,7 @@ export class ListCommand {
     for (const { id, specFile } of discovered) {
       try {
         const content = readFileSync(specFile, 'utf-8');
-        const parser = new MarkdownParser(content);
-        const spec = parser.parseSpec(id);
+        const spec = parseSpecContent(content, id);
         specs.push({ id, requirementCount: spec.requirements.length });
       } catch {
         // If spec cannot be read or parsed, include with 0 count
@@ -287,7 +297,7 @@ export class ListCommand {
     specs.sort((a, b) => a.id.localeCompare(b.id));
 
     if (json) {
-      console.log(JSON.stringify({ specs, ...(root ? { root } : {}) }, null, 2));
+      console.log(JSON.stringify({ specs, ...(warnings.length > 0 ? { warnings } : {}), ...(root ? { root } : {}) }, null, 2));
       return;
     }
 
@@ -297,6 +307,14 @@ export class ListCommand {
     for (const spec of specs) {
       const padded = spec.id.padEnd(nameWidth);
       console.log(`${padding}${padded}     requirements ${spec.requirementCount}`);
+    }
+    this.printSpecWarnings(warnings);
+  }
+
+  private printSpecWarnings(warnings: Array<{ message: string }>): void {
+    for (const warning of warnings) {
+      console.log('');
+      console.log(`Warning: ${warning.message}`);
     }
   }
 }

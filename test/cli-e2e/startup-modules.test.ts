@@ -33,6 +33,8 @@ const COMMAND_IMPLEMENTATIONS: Record<string, string[]> = {
   schema: ['commands/schema.js'],
   store: ['commands/store.js'],
   doctor: ['commands/doctor.js'],
+  ids: ['commands/ids.js'],
+  'convert-specs': ['commands/convert-specs.js'],
   context: ['commands/context.js'],
   workset: ['commands/workset.js'],
   status: ['commands/workflow/status.js'],
@@ -220,6 +222,8 @@ describe('CLI startup loads only what the command needs', () => {
     ['config path', 'config'],
     ['store list --json', 'store'],
     ['doctor --json', 'doctor'],
+    ['ids next --json', 'ids'],
+    ['convert-specs --dry-run --json', 'convert-specs'],
     ['schemas --json', 'schemas'],
     ['list --json', 'list'],
   ])('`openspec %s` loads only the %s implementation', async (invocation, command) => {

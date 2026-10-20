@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import path, { join } from 'path';
-import { MarkdownParser } from '../core/parsers/markdown-parser.js';
+import { parseSpecContent } from '../core/gherkin/spec-model.js';
+import { isRequirementId } from '../core/gherkin/ids.js';
 import { Validator } from '../core/validation/validator.js';
 import type { Spec } from '../core/schemas/index.js';
 import type { RootOutput } from '../core/root-selection.js';
@@ -37,12 +38,16 @@ export interface ShowOptions {
 function parseSpecFromFile(specsDir: string, specPath: string, specId: string): Spec {
   assertSpecPath(specsDir, specPath);
   const content = readFileSync(specPath, 'utf-8');
-  const parser = new MarkdownParser(content);
-  return parser.parseSpec(specId);
+  return parseSpecContent(content, specId);
 }
 
 function validateRequirementIndex(spec: Spec, requirementOpt?: string): number | undefined {
   if (!requirementOpt) return undefined;
+  if (isRequirementId(requirementOpt)) {
+    const byId = spec.requirements.findIndex((requirement) => requirement.id === requirementOpt);
+    if (byId === -1) throw new Error(`Requirement ${requirementOpt} not found`);
+    return byId;
+  }
   const index = Number.parseInt(requirementOpt, 10);
   if (!Number.isInteger(index) || index < 1 || index > spec.requirements.length) {
     throw new Error(`Requirement ${requirementOpt} not found`);
@@ -58,6 +63,7 @@ function filterSpec(spec: Spec, options: ShowOptions): Spec {
     ? [spec.requirements[requirementIndex]]
     : spec.requirements
   ).map(req => ({
+    ...(req.id ? { id: req.id } : {}),
     name: req.name,
     text: req.text,
     scenarios: includeScenarios ? req.scenarios : [],
@@ -109,12 +115,12 @@ export class SpecCommand {
       }
     }
 
-    const specPath = join(this.specsDir, specId, 'spec.md');
+    const specPath = join(this.specsDir, specId, 'spec.feature');
     assertSpecPath(this.specsDir, specPath);
     if (!existsSync(specPath)) {
       // Root-aware callers get the absolute path; the cwd-based noun form
       // keeps its historical forward-slash relative message on all platforms.
-      const displayPath = this.rootPath ? specPath : `openspec/specs/${specId}/spec.md`;
+      const displayPath = this.rootPath ? specPath : `openspec/specs/${specId}/spec.feature`;
       throw new Error(`Spec '${specId}' not found at ${displayPath}`);
     }
 
@@ -222,11 +228,11 @@ export async function specValidateCommand(
       }
     }
 
-    const specPath = join(SPECS_DIR, specId, 'spec.md');
+    const specPath = join(SPECS_DIR, specId, 'spec.feature');
     assertSpecPath(SPECS_DIR, specPath);
     
     if (!existsSync(specPath)) {
-      throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.md`);
+      throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.feature`);
     }
 
     const validator = new Validator(options.strict);

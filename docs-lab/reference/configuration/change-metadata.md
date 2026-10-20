@@ -40,7 +40,7 @@ Declares the change intentionally makes no spec deltas: a pure refactor, tooling
 
 ### retire_capabilities
 
-Authorizes archive to retire a capability. When this change's REMOVED deltas take away the last requirement a capability has, archive deletes that capability's main spec instead of stopping. The flag exists because the deletion is only recoverable from git, so it stays the author's call.
+Authorizes archive to retire a capability. When this change's `@removed` rules take away the last requirement a capability has, archive deletes that capability's main spec instead of stopping. The flag exists because the deletion is only recoverable from git, so it stays the author's call.
 
 ### Extension keys
 

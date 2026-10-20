@@ -17,6 +17,7 @@ import {
 } from '../core/root-selection.js';
 import { canRenderSpinner, isInteractive, resolveNoInteractive } from '../utils/interactive.js';
 import { getSpecIds } from '../utils/item-discovery.js';
+import { discoverLegacySpecFiles, legacySpecMessage, LEGACY_SPEC_ISSUE_MARKER } from '../utils/spec-discovery.js';
 import { getAvailableChanges } from './workflow/shared.js';
 import { nearestMatches } from '../utils/match.js';
 import { promises as fs } from 'fs';
@@ -216,7 +217,12 @@ export class ValidateCommand {
   }
 
   private async validateDirectItem(root: ResolvedOpenSpecRoot, itemName: string, opts: { typeOverride?: ItemType; strict: boolean; json: boolean }): Promise<void> {
-    const [changes, specs] = await Promise.all([this.listChangeIds(root), getSpecIds(root.path)]);
+    const [changes, featureSpecs, legacySpecs] = await Promise.all([
+      this.listChangeIds(root),
+      getSpecIds(root.path),
+      this.listLegacySpecIds(root),
+    ]);
+    const specs = [...featureSpecs, ...legacySpecs];
     const isChange = changes.includes(itemName);
     const isSpec = specs.includes(itemName);
 
@@ -300,7 +306,7 @@ export class ValidateCommand {
     // guarded before it is joined onto a directory. `show` already rejects a
     // traversing id.
     //
-    // Spec ids are nested (`specs/<area>/<capability>/spec.md`, #1353), so the
+    // Spec ids are nested (`specs/<area>/<capability>/spec.feature`, #1353), so the
     // guard runs per segment - rejecting the whole id for containing a `/`
     // would break every nested capability, including the hint that
     // `validate --specs` prints. Change names are flat, so they keep the
@@ -344,12 +350,23 @@ export class ValidateCommand {
       process.exitCode = report.valid ? 0 : 1;
       return;
     }
-    const file = path.join(root.specsDir, id, 'spec.md');
+    const file = path.join(root.specsDir, id, 'spec.feature');
     const start = Date.now();
-    const report = await validator.validateSpec(file);
+    const report = (await this.listLegacySpecIds(root)).includes(id)
+      ? this.legacySpecReport(id)
+      : await validator.validateSpec(file);
     const durationMs = Date.now() - start;
     this.printReport('spec', id, report, durationMs, opts.json, root);
     process.exitCode = report.valid ? 0 : 1;
+  }
+
+  /** Ids of main specs still in the old markdown format (spec.md, no spec.feature). */
+  private async listLegacySpecIds(root: ResolvedOpenSpecRoot): Promise<string[]> {
+    return (await discoverLegacySpecFiles(root.specsDir)).map((spec) => spec.id);
+  }
+
+  private legacySpecReport(id: string): { valid: false; issues: ValidationIssue[] } {
+    return { valid: false, issues: [{ level: 'ERROR', path: 'file', message: legacySpecMessage(id) }] };
   }
 
   private printReport(type: ItemType, id: string, report: { valid: boolean; issues: any[] }, durationMs: number, json: boolean, root: ResolvedOpenSpecRoot): void {
@@ -387,6 +404,10 @@ export class ValidateCommand {
     // A namespace folder has no deltas to author, so the delta-authoring
     // bullets below would point at a directory that is not the change (#1846).
     const nestedIssue = issues.some(i => i.message.includes(NESTED_CHANGE_ISSUE_MARKER));
+    const legacyIssue = issues.some(i => i.message.includes(LEGACY_SPEC_ISSUE_MARKER));
+    if (legacyIssue) {
+      bullets.push(`- Convert markdown specs to Gherkin feature files: ${withStoreFlag(root, 'openspec convert-specs')}`);
+    }
     if (type === 'change' && nestedIssue) {
       bullets.push('- Move each nested change directly under openspec/changes/, folding the namespace into its name');
       bullets.push('- Only specs may be nested by domain; change directories are always flat');
@@ -397,12 +418,13 @@ export class ValidateCommand {
       bullets.push('- Fix .openspec.yaml so the skip_specs marker can be honored (schema: <name> naming a known schema is required)');
       bullets.push('- Or remove skip_specs from .openspec.yaml and add delta specs instead');
     } else if (type === 'change') {
-      bullets.push('- Ensure change has deltas in specs/: use headers ## ADDED/MODIFIED/REMOVED/RENAMED Requirements');
-      bullets.push('- Each requirement MUST include at least one #### Scenario: block');
+      bullets.push('- Ensure change has deltas in specs/<capability>/spec.feature: Gherkin rules tagged @added, @modified or @removed');
+      bullets.push('- Each @added or @modified rule MUST include at least one Scenario: with steps');
+      bullets.push(`- Give rules without an ID their ID: ${withStoreFlag(root, `openspec ids assign ${id}`)}`);
       bullets.push(`- Debug parsed deltas: ${withStoreFlag(root, `openspec show ${id} --json --deltas-only`)}`);
     } else {
-      bullets.push('- Ensure spec includes ## Purpose and ## Requirements sections');
-      bullets.push('- Each requirement MUST include at least one #### Scenario: block');
+      bullets.push('- Ensure the spec is a Gherkin feature: a Feature: line, a description (the Purpose), and one Rule: per requirement');
+      bullets.push('- Each Rule MUST carry an ID tag such as @REQ-0001 and include at least one Scenario: with steps');
       bullets.push('- Re-run with --json to see structured report');
     }
     console.error('Next steps:');
@@ -442,10 +464,13 @@ export class ValidateCommand {
 
   private async runBulkValidation(root: ResolvedOpenSpecRoot, scope: { changes: boolean; specs: boolean }, opts: { strict: boolean; json: boolean; concurrency?: string; noInteractive?: boolean; findingsScope?: BulkScope }): Promise<void> {
     const spinner = !opts.json && isInteractive(opts) && canRenderSpinner() ? ora('Validating...').start() : undefined;
-    const [changeIds, specIds] = await Promise.all([
+    const [changeIds, featureSpecIds, legacySpecIds] = await Promise.all([
       scope.changes ? this.listChangeIds(root) : Promise.resolve<string[]>([]),
       scope.specs ? getSpecIds(root.path) : Promise.resolve<string[]>([]),
+      scope.specs ? this.listLegacySpecIds(root) : Promise.resolve<string[]>([]),
     ]);
+    const legacy = new Set(legacySpecIds);
+    const specIds = [...featureSpecIds, ...legacySpecIds];
 
     const DEFAULT_CONCURRENCY = 6;
     const maxSuggestions = 5; // used by nearestMatches
@@ -478,8 +503,8 @@ export class ValidateCommand {
     for (const id of specIds) {
       queue.push(async () => {
         const start = Date.now();
-        const file = path.join(root.specsDir, id, 'spec.md');
-        const report = await validator.validateSpec(file);
+        const file = path.join(root.specsDir, id, 'spec.feature');
+        const report = legacy.has(id) ? this.legacySpecReport(id) : await validator.validateSpec(file);
         const durationMs = Date.now() - start;
         return { id, type: 'spec' as const, valid: report.valid, issues: report.issues, durationMs };
       });

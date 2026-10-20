@@ -98,8 +98,8 @@ describe('declared store fallback (3.2)', () => {
     const deltaDir = path.join(changeDir, 'specs', 'billing');
     fs.mkdirSync(deltaDir, { recursive: true });
     fs.writeFileSync(
-      path.join(deltaDir, 'spec.md'),
-      '## ADDED Requirements\n\n### Requirement: Billing SHALL work\nThe system SHALL bill.\n\n#### Scenario: Bills\n- **WHEN** a period ends\n- **THEN** a bill exists\n'
+      path.join(deltaDir, 'spec.feature'),
+      'Feature: Billing\n\n  @added @REQ-0001\n  Rule: Billing SHALL work\n    The system SHALL bill.\n\n    Scenario: Bills\n      When a period ends\n      Then a bill exists\n'
     );
 
     const validate = await runCLI(['validate', 'billing-rework', '--json', '--no-interactive'], {
@@ -134,7 +134,7 @@ describe('declared store fallback (3.2)', () => {
   it('composes with 3.1: the declared root surfaces the store own references', async () => {
     const upstreamRoot = path.join(tempDir, 'upstream-context');
     createOpenSpecRoot(upstreamRoot);
-    writeSpec(upstreamRoot, 'platform-rules', '## Purpose\n\nPlatform rules.\n');
+    writeSpec(upstreamRoot, 'platform-rules', 'Feature: Platform rules\n  Platform rules.\n');
     await registerStore({ id: 'upstream-context', localPath: upstreamRoot, globalDataDir });
     fs.writeFileSync(
       path.join(storeRoot, 'openspec', 'config.yaml'),

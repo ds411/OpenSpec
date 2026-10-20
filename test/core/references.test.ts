@@ -103,9 +103,9 @@ describe('reference index assembly', () => {
     writeSpec(
       storeRoot,
       'billing',
-      '# billing\n\n## Purpose\n\nBilling must support usage-based invoicing.\nMore detail here.\n\n## Requirements\n'
+      'Feature: billing\n  Billing must support usage-based invoicing.\n  More detail here.\n'
     );
-    writeSpec(storeRoot, 'auth-sso', '# auth\n\n## Requirements\n\nNo purpose section.\n');
+    writeSpec(storeRoot, 'auth-sso', 'Feature: auth\n');
 
     const entries = await assemble(['team-context']);
 
@@ -231,7 +231,7 @@ describe('reference index assembly', () => {
     const storeRoot = await registerStore('team-context');
     // A corpus that would trip the 50KB budget with content included.
     for (let i = 0; i < 60; i++) {
-      writeSpec(storeRoot, `spec-${i}`, `## Purpose\n\n${'x'.repeat(1200)}\n`);
+      writeSpec(storeRoot, `spec-${i}`, `Feature: spec-${i}\n  ${'x'.repeat(1200)}\n`);
     }
 
     const entries = await assembleReferenceIndex({
@@ -294,7 +294,7 @@ describe('reference index assembly', () => {
 
   it('omits self-references silently, by id and by path', async () => {
     const storeRoot = await registerStore('self-context');
-    writeSpec(storeRoot, 'anything', '## Purpose\n\nA spec.\n');
+    writeSpec(storeRoot, 'anything', 'Feature: anything\n  A spec.\n');
 
     const byId = await assembleReferenceIndex({
       references: [{ id: 'self-context' }],
@@ -331,7 +331,7 @@ describe('reference index assembly', () => {
       writeSpec(
         storeRoot,
         `spec-${String(i).padStart(3, '0')}`,
-        `## Purpose\n\n${longSummary}\n`
+        `Feature: spec\n  ${longSummary}\n`
       );
     }
 
@@ -362,8 +362,8 @@ describe('reference index assembly', () => {
 
   it('renders the XML block and markdown section consistently', async () => {
     const storeRoot = await registerStore('team-context');
-    writeSpec(storeRoot, 'billing', '## Purpose\n\nUsage-based invoicing.\n');
-    writeSpec(storeRoot, 'bare', '## Requirements\n\nNothing else.\n');
+    writeSpec(storeRoot, 'billing', 'Feature: billing\n  Usage-based invoicing.\n');
+    writeSpec(storeRoot, 'bare', 'Feature: bare\n');
 
     const entries = await assemble(['team-context', 'missing-context']);
     const block = renderReferencedStoresBlock(entries);
@@ -384,63 +384,24 @@ describe('reference index assembly', () => {
 });
 
 describe('extractFirstPurposeLine', () => {
-  it('returns the first non-empty line under the Purpose heading', () => {
-    expect(extractFirstPurposeLine('# t\n\n## Purpose\n\n\nFirst line.\nSecond.\n')).toBe(
-      'First line.'
-    );
+  it('returns the first non-empty line of the feature description', () => {
+    expect(extractFirstPurposeLine('Feature: t\n\n  First line.\n  Second.\n')).toBe('First line.');
   });
 
-  it('returns empty for missing Purpose, empty Purpose, and unparseable content', () => {
-    expect(extractFirstPurposeLine('# t\n\n## Requirements\n\nStuff.\n')).toBe('');
-    expect(extractFirstPurposeLine('## Purpose\n\n## Requirements\n')).toBe('');
+  it('returns empty for a missing description and for content that does not parse', () => {
+    expect(extractFirstPurposeLine('Feature: t\n\n  @REQ-0001\n  Rule: r\n    Stuff.\n')).toBe('');
+    expect(extractFirstPurposeLine('# t\n\n## Purpose\n\nMarkdown is not read.\n')).toBe('');
     expect(extractFirstPurposeLine('')).toBe('');
   });
 
-  it('matches the heading case-insensitively at any level', () => {
-    expect(extractFirstPurposeLine('### purpose\nIt works.\n')).toBe('It works.');
-  });
-
-  it('ignores headings inside fenced code blocks', () => {
+  it('stops at the first rule', () => {
     expect(
-      extractFirstPurposeLine(
-        '```markdown\n## Purpose\nTemplate text.\n```\n\n## Purpose\n\nReal summary.\n'
-      )
-    ).toBe('Real summary.');
-    expect(
-      extractFirstPurposeLine('```md\n## Purpose\n## Requirements\n```\n\n## Purpose\n\nStill found.\n')
-    ).toBe('Still found.');
+      extractFirstPurposeLine('Feature: t\n\n  @REQ-0001\n  Rule: r\n    Rule statement.\n')
+    ).toBe('');
   });
 
-  it('accepts CommonMark closing hashes', () => {
-    expect(extractFirstPurposeLine('## Purpose ##\n\nClosed heading.\n')).toBe('Closed heading.');
-  });
-
-  it('follows CommonMark on heading edge cases', () => {
-    // A closing run only counts when whitespace precedes it.
-    expect(extractFirstPurposeLine('## Purpose ###\nx\n')).toBe('x');
-    expect(extractFirstPurposeLine('## Purpose###\nx\n')).toBe('');
-    expect(extractFirstPurposeLine('## Purpose\t##\nx\n')).toBe('x');
-
-    // Seven hashes is not a heading, and neither is a missing space.
-    expect(extractFirstPurposeLine('####### Purpose\nx\n')).toBe('');
-    expect(extractFirstPurposeLine('#Purpose\nx\n')).toBe('');
-
-    // Padding collapses; a title of only hashes keeps them.
-    expect(extractFirstPurposeLine('##   Purpose   ##  \nx\n')).toBe('x');
-    expect(extractFirstPurposeLine('## Purpose   \nx\n')).toBe('x');
-    expect(extractFirstPurposeLine('## ###\nx\n')).toBe('');
-
-    expect(extractFirstPurposeLine('## Purpose\r\nx\r\n')).toBe('x');
-  });
-
-  it('parses whitespace-padded headings in linear time', () => {
-    // The previous regex backtracked quadratically here: 10k padding took 60ms,
-    // 100k would take roughly six seconds.
-    const padded = `## a${' '.repeat(100_000)}#x\n\n## Purpose\n\nFound.\n`;
-
-    const started = performance.now();
-    expect(extractFirstPurposeLine(padded)).toBe('Found.');
-    expect(performance.now() - started).toBeLessThan(1000);
+  it('reads CRLF files', () => {
+    expect(extractFirstPurposeLine('Feature: t\r\n  x\r\n')).toBe('x');
   });
 });
 

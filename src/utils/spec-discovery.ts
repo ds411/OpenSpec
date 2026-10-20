@@ -3,20 +3,26 @@ import path from 'path';
 import { assertDiscoveredSpecFile } from './spec-path-containment.js';
 import { parseDeltaSpec } from '../core/parsers/requirement-blocks.js';
 
+/** The file that holds a capability's spec, in main specs and in change deltas. */
+export const SPEC_FILE_NAME = 'spec.feature';
+
+/** The markdown spec file of earlier versions, which `openspec convert-specs` replaces. */
+export const LEGACY_SPEC_FILE_NAME = 'spec.md';
+
 export interface DiscoveredSpec {
   /** Spec id relative to the specs root, forward-slash separated on every platform (e.g. "web" or "platform/session-layout"). */
   id: string;
-  /** Path to the spec.md file (absolute if the specs root is absolute). */
+  /** Path to the spec.feature file (absolute if the specs root is absolute). */
   specFile: string;
 }
 
 /**
- * Recursively discover every `spec.md` under a specs root, so both the flat
- * `specs/<id>/spec.md` layout and nested `specs/<area>/<id>/spec.md` layouts
- * are found (#1353). A `spec.md` sitting directly in the root is ignored,
+ * Recursively discover every `spec.feature` under a specs root, so both the flat
+ * `specs/<id>/spec.feature` layout and nested `specs/<area>/<id>/spec.feature` layouts
+ * are found (#1353). A `spec.feature` sitting directly in the root is ignored,
  * matching the historical requirement that specs live in a capability folder.
  * Dot-directories are skipped and symlinked directories are not followed.
- * A symlinked `spec.md` IS resolved: `hasAnyFileUnder` and the artifact
+ * A symlinked `spec.feature` IS resolved: `hasAnyFileUnder` and the artifact
  * graph's globs both count it as content, so dropping it here would silently
  * lose the delta on archive. `assertSpecFilePathAllowed` decides how far such
  * a link may point; a dangling link is skipped. Results are sorted by id.
@@ -26,7 +32,10 @@ export interface DiscoveredSpec {
  * archive/apply merge path, silently dropping an unreadable capability would
  * recreate the exact data-loss class #1353 is closing.
  */
-export async function discoverSpecFiles(specsRoot: string): Promise<DiscoveredSpec[]> {
+export async function discoverSpecFiles(
+  specsRoot: string,
+  fileName: string = SPEC_FILE_NAME
+): Promise<DiscoveredSpec[]> {
   const results: DiscoveredSpec[] = [];
   const walk = async (dir: string, segments: string[]): Promise<void> => {
     let entries;
@@ -40,7 +49,7 @@ export async function discoverSpecFiles(specsRoot: string): Promise<DiscoveredSp
       if (entry.name.startsWith('.')) continue;
       if (entry.isDirectory()) {
         await walk(path.join(dir, entry.name), [...segments, entry.name]);
-      } else if (entry.name === 'spec.md' && segments.length > 0) {
+      } else if (entry.name === fileName && segments.length > 0) {
         const specFile = path.join(dir, entry.name);
         if (entry.isFile()) {
           assertDiscoveredSpecFile(specsRoot, specFile);
@@ -66,22 +75,48 @@ export async function discoverSpecFiles(specsRoot: string): Promise<DiscoveredSp
   return results.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
+/**
+ * Main specs still in the old markdown format: a capability folder with a
+ * `spec.md` and no `spec.feature`. Nothing reads them any more, so list,
+ * validate and archive report them instead of acting as if the capability had
+ * no spec. Same walk and order as discoverSpecFiles.
+ */
+export async function discoverLegacySpecFiles(specsRoot: string): Promise<DiscoveredSpec[]> {
+  const [legacy, current] = await Promise.all([
+    discoverSpecFiles(specsRoot, LEGACY_SPEC_FILE_NAME),
+    discoverSpecFiles(specsRoot),
+  ]);
+  const converted = new Set(current.map((spec) => spec.id));
+  return legacy.filter((spec) => !converted.has(spec.id));
+}
+
+/** Text shared by every report of a spec file still in the old markdown format. */
+export const LEGACY_SPEC_ISSUE_MARKER = 'in the old markdown format';
+
+/** The message for a main spec still in the old markdown format. */
+export function legacySpecMessage(id: string): string {
+  return (
+    `Spec found at specs/${id}/${LEGACY_SPEC_FILE_NAME} ${LEGACY_SPEC_ISSUE_MARKER}. Specs are Gherkin feature files now: ` +
+    `run "openspec convert-specs" to convert it into specs/${id}/${SPEC_FILE_NAME}.`
+  );
+}
+
 export interface UnreadDeltaFile {
   /** File path relative to the specs root, forward-slash separated. */
   path: string;
-  /** The spec.md the merge path reads for it, relative to the specs root. */
+  /** The spec.feature the merge path reads for it, relative to the specs root. */
   expected: string;
+  /** True for a markdown file in the old delta format, which needs converting. */
+  legacyMarkdown: boolean;
 }
 
 /**
- * Markdown files under a change's specs/ that carry delta sections but are not
- * a capability's `spec.md`, so discoverSpecFiles, and with it validate and
- * archive, never reads them: `specs/user-auth.md`, or `specs/user-auth/delta.md`
- * beside or instead of the capability's spec.md. The artifact graph's
- * recursive specs/ markdown glob does match them, so status and apply report
- * the specs as written while archive has nothing to merge. A `spec.md` at the
- * specs/ root has its own check (#1385) and is not repeated here. Notes with
- * no delta section are not deltas and are not reported. The walk matches
+ * Files under a change's specs/ that carry deltas but are not a capability's
+ * `spec.feature`, so discoverSpecFiles, and with it validate and archive, never
+ * reads them: `specs/user-auth.feature`, `specs/user-auth/delta.feature`, or a
+ * markdown file still written in the old `## ADDED Requirements` format. A
+ * `spec.feature` at the specs/ root has its own check (#1385) and is not
+ * repeated here. Files with no delta content are not reported. The walk matches
  * discoverSpecFiles: dot entries are skipped, symlinked directories are not
  * followed, and a dangling link is skipped. A missing root yields an empty
  * list; any other read failure is thrown. Results are sorted by path.
@@ -103,7 +138,10 @@ export async function findUnreadDeltaFiles(specsRoot: string): Promise<UnreadDel
         continue;
       }
       if (!entry.isFile() && !entry.isSymbolicLink()) continue;
-      if (entry.name === 'spec.md' || !entry.name.toLowerCase().endsWith('.md')) continue;
+      if (entry.name === SPEC_FILE_NAME) continue;
+      const lower = entry.name.toLowerCase();
+      const isFeature = lower.endsWith('.feature');
+      if (!isFeature && !lower.endsWith('.md')) continue;
       const filePath = path.join(dir, entry.name);
       let content: string;
       try {
@@ -114,10 +152,20 @@ export async function findUnreadDeltaFiles(specsRoot: string): Promise<UnreadDel
         if (err?.code === 'ENOENT') continue;
         throw err;
       }
-      if (!Object.values(parseDeltaSpec(content).sectionPresence).some(Boolean)) continue;
+      // Loaded here, not at the top: tab completion discovers specs and must
+      // not pay for the Gherkin parser.
+      const carriesDeltas = isFeature
+        ? (await import('../core/gherkin/document.js')).parseFeature(content).rules.length > 0
+        : Object.values(parseDeltaSpec(content).sectionPresence).some(Boolean);
+      if (!carriesDeltas) continue;
+      const extension = isFeature ? '.feature' : '.md';
       const capability =
-        segments.length > 0 ? segments.join('/') : entry.name.slice(0, -'.md'.length);
-      results.push({ path: [...segments, entry.name].join('/'), expected: `${capability}/spec.md` });
+        segments.length > 0 ? segments.join('/') : entry.name.slice(0, -extension.length);
+      results.push({
+        path: [...segments, entry.name].join('/'),
+        expected: `${capability}/${SPEC_FILE_NAME}`,
+        legacyMarkdown: !isFeature,
+      });
     }
   };
   await walk(specsRoot, []);
@@ -128,7 +176,7 @@ export async function findUnreadDeltaFiles(specsRoot: string): Promise<UnreadDel
  * True when any regular non-dot file exists anywhere under the given
  * directory. Used by validate/archive to detect content under a change's
  * specs/ that contradicts a declared skip_specs marker - including files that
- * discoverSpecFiles ignores (a root spec.md, stray non-spec.md notes), since
+ * discoverSpecFiles ignores (a root spec.feature, stray notes), since
  * anything there would be silently dropped or misread while the change claims
  * to have nothing. Dot entries (.DS_Store, .gitkeep, dot-directories) are
  * skipped to match discoverSpecFiles - they are invisible to every other

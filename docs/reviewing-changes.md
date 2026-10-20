@@ -20,14 +20,14 @@ The first review is the one that saves you the most, and the one people skip. Th
 
 ## Read it in this order
 
-A change is a folder of plain Markdown in `openspec/changes/<name>/`. Read the files in the order that lets you quit earliest if something's wrong:
+A change is a folder of plain-text files in `openspec/changes/<name>/`: Markdown documents and Gherkin specs. Read the files in the order that lets you quit earliest if something's wrong:
 
 ```
 openspec/changes/add-dark-mode/
-├── proposal.md      1. the intent and scope   ← if this is wrong, stop here
-├── specs/…/spec.md  2. the requirements       ← the heart of the review
-├── design.md        (only for bigger changes) — the technical approach
-└── tasks.md         3. the plan of work
+├── proposal.md           1. the intent and scope   ← if this is wrong, stop here
+├── specs/…/spec.feature  2. the requirements       ← the heart of the review
+├── design.md             (only for bigger changes) — the technical approach
+└── tasks.md              3. the plan of work
 ```
 
 You don't need to read every line. You need to answer three questions, one per file.
@@ -50,19 +50,20 @@ Open `proposal.md` first. It captures the "why" and "what" — the intent, the s
 
 This is the heart of the review. The delta specs under `specs/` say what will be *true* when the change ships — as requirements and the scenarios that prove them:
 
-```markdown
-## ADDED Requirements
+```gherkin
+Feature: UI
 
-### Requirement: Dark Mode Toggle
-The system SHALL let a user switch between light and dark themes.
+  @added @REQ-0012
+  Rule: Dark Mode Toggle
+    The system SHALL let a user switch between light and dark themes.
 
-#### Scenario: Respects the OS preference on first load
-- GIVEN a user who has never set a theme
-- WHEN they open the app on a device set to dark mode
-- THEN the app renders in dark mode
+    Scenario: Respects the OS preference on first load
+      Given a user who has never set a theme
+      When they open the app on a device set to dark mode
+      Then the app renders in dark mode
 ```
 
-**What a good requirement looks like:** one clear `SHALL`/`MUST` statement you could hand to a tester, and at least one scenario whose GIVEN/WHEN/THEN actually exercises that statement.
+**What a good requirement looks like:** one clear `SHALL`/`MUST` statement you could hand to a tester, and at least one scenario whose `Given`/`When`/`Then` actually exercises that statement. A `@modified` or `@removed` rule should carry the ID of the requirement it changes; `openspec show <change> --diff` shows each `@modified` rule as a diff against that requirement.
 
 **Red flags:**
 
@@ -90,7 +91,7 @@ You're not estimating or micromanaging here — you're checking that the plan ma
 
 If any of the three questions came back wrong, say so. There are no phases and nothing is locked — you fix it and move on. Two ways, exactly as in [Editing a change](editing-changes.md):
 
-- **Edit the file yourself.** It's plain Markdown; change the scope line, tighten a requirement, delete a task.
+- **Edit the file yourself.** It's plain text; change the scope line, tighten a requirement, delete a task.
 - **Tell the AI what's wrong** and let it revise: *"drop the auth changes — out of scope,"* *"add a scenario for when the user has already picked a theme,"* *"split task 3 into schema and UI."*
 
 Then re-read the part you changed. Re-draft until it's a plan you'd sign your name to. That back-and-forth *is* the product working.

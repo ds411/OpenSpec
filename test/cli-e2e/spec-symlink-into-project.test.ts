@@ -7,7 +7,7 @@ import { runCLI } from '../helpers/run-cli.js';
 /**
  * The layout reported in #2100: a project keeps its main specs beside the
  * product documentation they belong to and links
- * `openspec/specs/<capability>/spec.md` to them, so OpenSpec and the docs read
+ * `openspec/specs/<capability>/spec.feature` to them, so OpenSpec and the docs read
  * and write the same bytes.
  *
  * Driven through the real CLI on purpose. The regression this guards against
@@ -27,31 +27,29 @@ describeWithSymlinks('a main spec that is a symlink into the project (#2100)', (
   let linkedSpec: string;
 
   const MAIN_SPEC = [
-    '# login Specification',
+    'Feature: Login',
+    '  Users sign in with their credentials to reach their account.',
     '',
-    '## Purpose',
-    'Users sign in with their credentials to reach their account.',
+    '  @REQ-0001',
+    '  Rule: Sign in',
+    '    The system SHALL let a user sign in with valid credentials.',
     '',
-    '## Requirements',
-    '',
-    '### Requirement: Sign in',
-    'The system SHALL let a user sign in with valid credentials.',
-    '',
-    '#### Scenario: Valid credentials',
-    '- **WHEN** the user submits valid credentials',
-    '- **THEN** the user is signed in',
+    '    Scenario: Valid credentials',
+    '      When the user submits valid credentials',
+    '      Then the user is signed in',
     '',
   ].join('\n');
 
   const DELTA = [
-    '## ADDED Requirements',
+    'Feature: Login',
     '',
-    '### Requirement: Second factor',
-    'The system SHALL require a second factor.',
+    '  @added @REQ-0002',
+    '  Rule: Second factor',
+    '    The system SHALL require a second factor.',
     '',
-    '#### Scenario: Prompted',
-    '- **WHEN** a user signs in',
-    '- **THEN** a second factor is requested',
+    '    Scenario: Prompted',
+    '      When a user signs in',
+    '      Then a second factor is requested',
     '',
   ].join('\n');
 
@@ -66,14 +64,14 @@ describeWithSymlinks('a main spec that is a symlink into the project (#2100)', (
     // temp root genuinely leaves the project.
     base = await fs.mkdtemp(path.join(tmpdir(), 'openspec-spec-symlink-e2e-'));
     projectDir = path.join(base, 'repo');
-    docsSpec = path.join(projectDir, 'docs', 'auth', 'specs', 'login.md');
-    linkedSpec = path.join(projectDir, 'openspec', 'specs', 'login', 'spec.md');
+    docsSpec = path.join(projectDir, 'docs', 'auth', 'specs', 'login.feature');
+    linkedSpec = path.join(projectDir, 'openspec', 'specs', 'login', 'spec.feature');
 
-    await write(path.join('docs', 'auth', 'specs', 'login.md'), MAIN_SPEC);
+    await write(path.join('docs', 'auth', 'specs', 'login.feature'), MAIN_SPEC);
     await write(path.join('openspec', 'changes', 'add-mfa', 'proposal.md'),
       '# Add MFA\n\n## Why\nAccounts need a second factor.\n\n## What Changes\n- Require a second factor\n');
     await write(path.join('openspec', 'changes', 'add-mfa', 'tasks.md'), '## 1. Work\n- [x] 1.1 Ship it\n');
-    await write(path.join('openspec', 'changes', 'add-mfa', 'specs', 'login', 'spec.md'), DELTA);
+    await write(path.join('openspec', 'changes', 'add-mfa', 'specs', 'login', 'spec.feature'), DELTA);
     await fs.mkdir(path.dirname(linkedSpec), { recursive: true });
   });
 
@@ -127,7 +125,7 @@ describeWithSymlinks('a main spec that is a symlink into the project (#2100)', (
     let outside: string;
 
     beforeEach(async () => {
-      outside = path.join(base, 'outside.md');
+      outside = path.join(base, 'outside.feature');
       await fs.writeFile(outside, MAIN_SPEC);
       await linkInto(outside);
     });

@@ -76,46 +76,46 @@ function specDrivenTitles(): Record<string, string> {
 }
 
 const EXPECTED_FUNCTION_HASHES: Record<string, string> = {
-  getExploreSkillTemplate: '80246765b685ec1e5530e8348bde84ed2ba0a6c418c9fbcd7e9e79a638d289dd',
-  getNewChangeSkillTemplate: '0e5035b7b42198afc430206a1dbc9579096650ef0813d85e837d5a6cd0b98a85',
-  getContinueChangeSkillTemplate: '2da5a24eb949f0717ffdb23c28c021ab6f73dc4beeb92ab709b8dbdac9db7355',
-  getApplyChangeSkillTemplate: 'c4f02c29137e19b34bf1dc59146941b8c920214aa2cf3ce80ae7f1b982e976fc',
-  getFfChangeSkillTemplate: '0eb8ddc6da710bc9ed6cd142a2eec1bec883f730125d76dc38e532bd5395bdf2',
-  getSyncSpecsSkillTemplate: 'bc80fe9b07eaa289e5eb8a3ce65eb7df722a16d864e37283c678220712e4f230',
-  getOnboardSkillTemplate: '84258a06c0ca88de708a23dd74e9a17efe11eff63a071b3864c781dcd5a0a4b7',
-  getOpsxExploreCommandTemplate: 'c0af210bc070b7ac5168523b381cb9e213e4e102205bfc26bdae15677d954ae1',
-  getOpsxNewCommandTemplate: '6d504fef1e0d4ced7c423f4cc9d9d2cee11b1a6224edf685e06a3f0757e0ebff',
-  getOpsxContinueCommandTemplate: '9e36b758c2760fcab4dcef4677ee678eb29eac00f31de8cbc99f812a440afaaf',
-  getOpsxApplyCommandTemplate: '9b733946aa7216b45d084bb5affd7071086db6f91282c3666731a17543825ff1',
-  getOpsxFfCommandTemplate: '625d6a4a52adeaa16dbceff378f1d7cb07556e79b19d9af63feca5125aa4da13',
-  getArchiveChangeSkillTemplate: '04a029782fc4137971fad6f54cfda3685d7e0b835b06565f9a509b4878093099',
-  getBulkArchiveChangeSkillTemplate: '44dbd3c7a347e5f8339b2141393f2ac36017527cce251483fe70f2059c1e286e',
-  getOpsxSyncCommandTemplate: '60550b7bb9829421656d6324a9e4c951bc912f48f88882d1a07ce7f78397a5e7',
-  getVerifyChangeSkillTemplate: '5c188c8e94fa0d4717cc3475813017d9e0bea9c53ad1df7303d18533cc26ee7f',
-  getOpsxArchiveCommandTemplate: '5d153490bf1ca24207f49856826720f793c8884a6ec15059104107b0e34ee345',
-  getOpsxOnboardCommandTemplate: '0cf66e164c0e14c916c6d1ebb5d80ded07d7fb8e55d4eb34eba43e8ca9c28558',
-  getOpsxBulkArchiveCommandTemplate: 'cb1d55d6ce53686bfe94be5e081c7a4d06a8e4d10b63019132df5bb3db7144cb',
-  getOpsxVerifyCommandTemplate: '9f3b4551a3cce3f1d1aa6c14fc595424ba22cd049326412460b30bd32e4cb0fc',
-  getOpsxProposeSkillTemplate: 'd5e0e2d675cedaffbd771892f15edd8f7f55b464ee42362b1572aa59c4c1d492',
-  getOpsxProposeCommandTemplate: 'f30af4ce5b7677bd664da71dd6d616a93278335e8828a7c3442fab59c339a11b',
+  getExploreSkillTemplate: '584af7831485e20ebb18311940ddbc6dd80459a0f3cad92b8e90a34182a22e4e',
+  getNewChangeSkillTemplate: 'eb3b8e2c61a23791a7fe9f754b2eb822f79aa12e8ace549cfbd5262d79d918fa',
+  getContinueChangeSkillTemplate: '2dce669e84687cbf4876d05cf835fa3c5be97b147ed25be7f4e8d193eb851edf',
+  getApplyChangeSkillTemplate: 'b7740520f56acd511ceb73d15cec0ff9057e407fec504f402f0fa3e19efca755',
+  getFfChangeSkillTemplate: 'c448eed8bd3dac72166fd46d698d5925a3d9892c3a4fa69f7b34e66dc0a9ac6d',
+  getSyncSpecsSkillTemplate: 'b929865cb0714b1afacba4ab6b81097be3a2858dd8ca1a5df5958d10d6d86792',
+  getOnboardSkillTemplate: '6ffd44bbd08d25887c676e017fe1d7b30b1be8fcdb38aa14985310529d82c90a',
+  getOpsxExploreCommandTemplate: '36fda9573ea8b292de612dcf2e10dba8dcb78eed1e9874f0d3d261601708dad0',
+  getOpsxNewCommandTemplate: 'ba9da607f69050692c05b854b6d53531d87a0bfd1d1928e5c54a0b1d330cd0a9',
+  getOpsxContinueCommandTemplate: 'ac188d1a1de4e190c727f4af3643dc65ce8b430d0d10380b8a0795bd158bd238',
+  getOpsxApplyCommandTemplate: 'b253b810f3db5d1f4af1d5dad3fddc9b48fc8cd9cc0e156225254ce212298427',
+  getOpsxFfCommandTemplate: '168b53544f344dbd3f58024857fed2bce2c54dbdf5126af716f0f75725ee33e0',
+  getArchiveChangeSkillTemplate: 'ec8b500750e139cbdfee50cf3fefdab59281742373b48c7354bc8052f718eec8',
+  getBulkArchiveChangeSkillTemplate: 'f4da8e628bb8626c6fba520270c3de171a0b917981ca5ec2ea32f5bb6bd06a33',
+  getOpsxSyncCommandTemplate: 'f39ee60fd86576c0ec07f362f24f6e37fb789f46d8953fecab474ab5110d8746',
+  getVerifyChangeSkillTemplate: '8a70e09d765342caa315c4abe54b16fb2fcfc13ec115b4f8a67fd327a61e320f',
+  getOpsxArchiveCommandTemplate: 'b73478d79c442cc169dbb89f2ece1248b361fa4420b38b32967177a3ea58fceb',
+  getOpsxOnboardCommandTemplate: '08dec9f3c553d28f340a68a2fd0529aa79b0599ecb4c6b530fe9fcdec9733881',
+  getOpsxBulkArchiveCommandTemplate: 'c24e8d202c0d68b80692e426cefabfc56569ba82fdbc599312ed4c1a6e2cc11f',
+  getOpsxVerifyCommandTemplate: '6bc6796fc8ea07f57e396e7665cda69f2823aac5a74e28fcde38ed6b38873ea1',
+  getOpsxProposeSkillTemplate: '2e4a46ac969945d25ebf4bc8af69297049e0fc5e19125ef8896b0612d6c30721',
+  getOpsxProposeCommandTemplate: '7b8bcab2fc1b9c920cd88fac899ce3ea6503b657fdda30f28c83cce5f9c8519c',
   getFeedbackSkillTemplate: 'dabeb5e825b9349abc8156c3e7b8608f27987912a6d9bf47ef29addde6138133',
-  getUpdateChangeSkillTemplate: '14c209b8a18d1b100d372b0ef96707b70a7c64117a16309ee463f66d39180b3e',
-  getOpsxUpdateCommandTemplate: '33528a80c9436c9dad74084a37d2fce5e78e34abfb71185fa21495a4f2a8b4d3',
+  getUpdateChangeSkillTemplate: '82683f744c0cef371e423907ed98f55ce1b9790eac2daa1fda97af62c975744a',
+  getOpsxUpdateCommandTemplate: 'c7afba4ab1277f31d4ca76f9053ef512c834c804eeb031c8207ca5826e999fdc',
 };
 
 const EXPECTED_GENERATED_SKILL_CONTENT_HASHES: Record<string, string> = {
-  'openspec-explore': '90a87227a7d3dca576448bb16936cede31b4e4666d35a6f0744e0b9bc628f1ac',
-  'openspec-new-change': '27e09d43785953827efc9a98bb9d6cf06db48fe6abe7e1c049409fe5b5061323',
-  'openspec-continue-change': 'd8859091316ad43a58cd015091454a95bf49378ec9d9117b24ab9b2396dc8303',
-  'openspec-apply-change': '991a1d4687f1c8c7147d8c3b68cf14e9c515c6c53bb026356dac3b80e909b827',
-  'openspec-ff-change': '224ff2ed2315eb23876fc4b83d796b60cf3cd05d853f2612e5b056ee7a6e93d2',
-  'openspec-sync-specs': '3909936a236a21a9a6d5bf495f90b396b3b68fc9220d7b2c1894668653beb2e4',
-  'openspec-archive-change': '5f0d131a885dcdcd9ba2172ea9a42bc6748125e24b8c4eecb7c86f1a4aea83af',
-  'openspec-bulk-archive-change': 'd2a258055ab2f0d8086c4348d37212ebc95a5adef2d5f524db959fb93490d5c8',
-  'openspec-verify-change': '9422e0afeec1dbd27c425258e67d52d73686c07765a54edeba62043c9640c8b5',
-  'openspec-onboard': '6993eff867d97d485e080078f9dfb80e968e242f3b17a924eeb077715fd548fa',
-  'openspec-propose': '2bbfc169f483cbacc481bf5160aece61d5237e1bca80955f48f7e2a4814e6143',
-  'openspec-update-change': 'a6fc9d6972bfb024b91f0a01e14d8a7666ae641bcad83cfae937e41dcccc545a',
+  'openspec-explore': '5a0e5fe83592a65d4f8909e86cc6d2ae50d21e189d9ee3e5fdca3b687855edfc',
+  'openspec-new-change': '3a73378df84831a810a0638af493c850a85aacce924414ab44acaeb9de862785',
+  'openspec-continue-change': '366049832931f4f7e44cdb7a8e8328deb05ddf7e11aee8ce1b530142fd0a8226',
+  'openspec-apply-change': '2e95cf6cb2524bbe3a3fd27ac0e86fe67dd9da43ab3d8f1aca7512489d018a67',
+  'openspec-ff-change': '160f577cf426729f9b5a6b00089c93fac94fd177669a32c8e11f1fbba608756c',
+  'openspec-sync-specs': 'c32d8498a5e356c8d653451e6f7977e45538b18bdae30238e71b4ed1cfa9bbec',
+  'openspec-archive-change': '2693850e36db8e72643d3285902efe14f0c73d3863e4675362c2e9afcbf6054e',
+  'openspec-bulk-archive-change': 'd202779d5ab2a501d55dc5352534aa296eb5e256c06724b9d43fb25e78e17b39',
+  'openspec-verify-change': '4ae31e530599e6e43deb8c344b9aa661c3cc406b98a38f50b8c16ebd4205122a',
+  'openspec-onboard': 'b9ed1934821fa56614a2c1bc4cbc324b1608c4bb9348762c55e71ea270ce5d28',
+  'openspec-propose': 'e9bd0cd89f1542943344e7815b73d1fa69bbc41bd5c4dd55a462ef533f7582cb',
+  'openspec-update-change': '717ac2aede6eef6e3fe03fe6461903c033ab5180f9ff249c917bb4181fc42180',
 };
 
 // Intentionally excludes getFeedbackSkillTemplate: this list only models templates
@@ -331,25 +331,25 @@ describe('skill templates split parity', () => {
       [
         'propose skill',
         generateSkillContent(asDeployed(getOpsxProposeSkillTemplate()), 'PARITY-BASELINE'),
-        'specs/<capability-path>/spec.md',
+        'specs/<capability-path>/spec.feature',
         "Preserve an existing capability's full path",
       ],
       [
         'propose command',
         getOpsxProposeCommandTemplate().content,
-        'specs/<capability-path>/spec.md',
+        'specs/<capability-path>/spec.feature',
         "Preserve an existing capability's full path",
       ],
       [
         'explore skill',
         generateSkillContent(asDeployed(getExploreSkillTemplate()), 'PARITY-BASELINE'),
-        'specs/<capability-path>/spec.md',
+        'specs/<capability-path>/spec.feature',
         "Preserve an existing capability's full path",
       ],
       [
         'explore command',
         getOpsxExploreCommandTemplate().content,
-        'specs/<capability-path>/spec.md',
+        'specs/<capability-path>/spec.feature',
         "Preserve an existing capability's full path",
       ],
       [
@@ -367,37 +367,37 @@ describe('skill templates split parity', () => {
       [
         'sync skill',
         generateSkillContent(asDeployed(getSyncSpecsSkillTemplate()), 'PARITY-BASELINE'),
-        '<planningHome.root>/openspec/specs/<capability-path>/spec.md',
+        '<planningHome.root>/openspec/specs/<capability-path>/spec.feature',
         'Preserve the full path from each delta spec',
       ],
       [
         'sync command',
         getOpsxSyncCommandTemplate().content,
-        '<planningHome.root>/openspec/specs/<capability-path>/spec.md',
+        '<planningHome.root>/openspec/specs/<capability-path>/spec.feature',
         'Preserve the full path from each delta spec',
       ],
       [
         'archive skill',
         generateSkillContent(asDeployed(getArchiveChangeSkillTemplate()), 'PARITY-BASELINE'),
-        '<planningHome.root>/openspec/specs/<capability-path>/spec.md',
+        '<planningHome.root>/openspec/specs/<capability-path>/spec.feature',
         'Preserve the full path from each delta spec',
       ],
       [
         'archive command',
         getOpsxArchiveCommandTemplate().content,
-        '<planningHome.root>/openspec/specs/<capability-path>/spec.md',
+        '<planningHome.root>/openspec/specs/<capability-path>/spec.feature',
         'Preserve the full path from each delta spec',
       ],
       [
         'bulk archive skill',
         generateSkillContent(asDeployed(getBulkArchiveChangeSkillTemplate()), 'PARITY-BASELINE'),
-        '<planningHome.root>/openspec/specs/<capability-path>/spec.md',
+        '<planningHome.root>/openspec/specs/<capability-path>/spec.feature',
         'Preserve the full path from each delta spec',
       ],
       [
         'bulk archive command',
         getOpsxBulkArchiveCommandTemplate().content,
-        '<planningHome.root>/openspec/specs/<capability-path>/spec.md',
+        '<planningHome.root>/openspec/specs/<capability-path>/spec.feature',
         'Preserve the full path from each delta spec',
       ],
     ];
@@ -406,7 +406,7 @@ describe('skill templates split parity', () => {
       expect(content, label).toContain(capabilityPathDefinition);
       expect(content, label).toContain(destination);
       expect(content, label).toContain(preservationGuidance);
-      expect(content, label).not.toContain('specs/<capability>/spec.md');
+      expect(content, label).not.toContain('specs/<capability>/spec.feature');
     }
 
     const onboardVariants: Array<[string, string]> = [
@@ -575,38 +575,26 @@ describe('skill templates split parity', () => {
       expect(content, variant).toContain('do not move its `changeRoot`');
 
       // Verification must follow delta semantics.
-      expect(content, variant).toContain('MODIFIED requirements carrying the scenario and description changes');
-      expect(content, variant).toContain('REMOVED requirements gone');
-      expect(content, variant).toContain('RENAMED requirements present under the new name and absent under the old one');
+      expect(content, variant).toContain('`@added` requirements present under their IDs');
+      expect(content, variant).toContain('`@modified` requirements carrying the name, statement and scenario changes');
+      expect(content, variant).toContain('`@removed` requirements gone');
 
       // Verification is bound to the delta specs on disk, not to whatever the sync reports it touched.
       expect(content, variant).toContain('not only the ones the sync reports it touched');
 
       // Main spec paths are store-root aware
-      expect(content, variant).toContain('<planningHome.root>/openspec/specs/<capability-path>/spec.md');
+      expect(content, variant).toContain('<planningHome.root>/openspec/specs/<capability-path>/spec.feature');
 
       // Semantic main-spec structure contract.
-      expect(content, variant).toContain('A new main spec starts with a `# <capability> Specification` title. An existing main spec keeps its title exactly as it is.');
-      expect(content, variant).not.toContain('MUST start with a `# <capability> Specification` title');
-      expect(content, variant).toContain('Preserve existing `## Purpose` sections completely untouched for established main specs.');
-      expect(content, variant).toContain('For a new main spec, copy the delta `## Purpose` verbatim.');
-      expect(content, variant).toContain('If no usable `## Purpose` is provided, use the existing TBD Purpose behavior and warning.');
-      expect(content, variant).toContain('Requirement blocks the sync wrote or changed use `### Requirement:` headings');
+      expect(content, variant).toContain("A new main spec starts with the delta's `Feature:` line. An existing main spec keeps its `Feature:` line exactly as it is.");
+      expect(content, variant).toContain('Preserve the feature description (the Purpose) of an established main spec completely untouched.');
+      expect(content, variant).toContain("For a new main spec, copy the delta's feature description verbatim.");
+      expect(content, variant).toContain('If the delta has no usable feature description, use the existing TBD Purpose behavior and warning.');
+      expect(content, variant).toContain('Each rule the sync wrote or changed keeps exactly one requirement ID tag');
       expect(content, variant).toContain('Leave content the delta does not mention exactly as it is.');
 
-      // Every canonical delta header must be rejected.
-      const deltaHeaders = [
-          '## ADDED Requirements',
-          '## MODIFIED Requirements',
-          '## REMOVED Requirements',
-          '## RENAMED Requirements',
-      ];
-
-      expect(content, variant).toContain('Verify that no delta-style section headers (`## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements`, `## RENAMED Requirements`) remain in the main spec');
-
-      for (const header of deltaHeaders) {
-          expect(content, variant).toContain(header);
-      }
+      // Every operation tag must be rejected in the main spec.
+      expect(content, variant).toContain('Verify that no operation tag (`@added`, `@modified`, `@removed`) remains in the main spec');
     }
   });
 
@@ -634,20 +622,20 @@ describe('skill templates split parity', () => {
         'A missing main spec is **not automatically** "already synced"'
       );
       expect(assessStep, variant).toContain('is an *output* of the sync, not an input');
-      expect(assessStep, variant).toContain('If the delta has MODIFIED or RENAMED');
-      expect(assessStep, variant).toContain('only ADDED requirements can create');
+      expect(assessStep, variant).toContain('If the delta has `@modified` rules');
+      expect(assessStep, variant).toContain('only `@added` rules can create');
       expect(assessStep, variant).toContain('Never invent a requirement');
-      expect(assessStep, variant).toContain('Otherwise, if the delta has no ADDED requirements');
+      expect(assessStep, variant).toContain('Otherwise, if the delta has no `@added` rules');
       expect(assessStep, variant).toContain('report that no sync is possible');
-      expect(assessStep, variant).toContain('For a REMOVED-only delta');
+      expect(assessStep, variant).toContain('For a `@removed`-only delta');
       expect(assessStep, variant).toContain('leave the main-spec tree unchanged');
       expect(assessStep, variant).toContain('mark that capability as sync-blocked');
       expect(assessStep, variant).toContain('Spec must have at least one requirement');
       expect(assessStep, variant).toContain('Otherwise, count the capability as needing sync');
-      expect(assessStep, variant).toContain('If the delta also has REMOVED requirements');
+      expect(assessStep, variant).toContain('If the delta also has `@removed` rules');
       expect(assessStep, variant).toContain('warn that they will be ignored');
       expect(assessStep, variant).toContain(
-        "creates the main spec from only the delta's ADDED requirements"
+        "creates the main spec from only the delta's `@added` rules"
       );
     }
 
@@ -666,10 +654,10 @@ describe('skill templates split parity', () => {
       const readStep = content.slice(start, end);
 
       expect(readStep, variant).toContain('**If it does not exist yet** (a new capability)');
-      expect(readStep, variant).toContain('only ADDED requirements may be applied');
-      expect(readStep, variant).toContain('MODIFIED and RENAMED have no requirement to act on');
+      expect(readStep, variant).toContain('only `@added` rules may be applied');
+      expect(readStep, variant).toContain('`@modified` rules have no requirement to act on');
       expect(readStep, variant).toContain('never invent the missing requirement');
-      expect(readStep, variant).toContain('REMOVED has nothing to');
+      expect(readStep, variant).toContain('`@removed` has');
 
       // ...and the creation step must not then write the empty spec the CLI refuses:
       // an unmarked REMOVED-only delta against a capability with no main spec aborts with
@@ -681,12 +669,12 @@ describe('skill templates split parity', () => {
       const createStep = content.slice(createStart, createEnd);
 
       expect(createStep, variant).toContain(
-        'Only when the delta has ADDED requirements to put in it'
+        'Only when the delta has `@added` rules to put in it'
       );
-      expect(createStep, variant).toContain('RENAMED requirements blocked this capability in step b');
+      expect(createStep, variant).toContain('rules blocked this capability in step b');
       expect(createStep, variant).toContain('create nothing');
       expect(createStep, variant).toContain('Spec must have at least one requirement');
-      expect(createStep, variant).toContain('Never write an empty');
+      expect(createStep, variant).toContain('Never write a main spec with no rules');
     }
   });
 
@@ -722,9 +710,9 @@ describe('skill templates split parity', () => {
         content.indexOf('**If delta specs exist:**'),
         content.indexOf('**Prompt options:**')
       );
-      const retirement = assessment.indexOf('Otherwise, if the delta has only REMOVED requirements');
+      const retirement = assessment.indexOf('Otherwise, if the delta has only `@removed` rules');
       expect(retirement).toBeGreaterThan(-1);
-      expect(retirement).toBeLessThan(assessment.indexOf('Otherwise, if the delta has no ADDED requirements'));
+      expect(retirement).toBeLessThan(assessment.indexOf('Otherwise, if the delta has no `@added` rules'));
       expect(assessment).toContain('`retire_capabilities: true`');
       expect(assessment).toContain('count it as already synced');
       expect(assessment).toContain('do not recreate the main spec');
@@ -765,16 +753,16 @@ describe('skill templates split parity', () => {
       expect(content, variant).toContain('Verify included delta specs before moving changeRoot');
 
       // Verification must follow delta semantics.
-      expect(content, variant).toContain('MODIFIED requirements carrying scenario and description changes');
-      expect(content, variant).toContain('REMOVED requirements gone');
-      expect(content, variant).toContain('RENAMED requirements present under the new name and absent under the old one');
+      expect(content, variant).toContain('`@added` requirements present under their IDs');
+      expect(content, variant).toContain('`@modified` requirements carrying the name, statement and scenario changes');
+      expect(content, variant).toContain('`@removed` requirements gone');
 
       expect(content, variant).toContain('If the sync reports any stop or blocking condition, treat the sync as failed');
       expect(content, variant).toContain('Do not perform the post-sync content comparison');
       expect(content, variant).toContain('do not move its `changeRoot`');
 
       // Main spec paths are store-root aware
-      expect(content, variant).toContain('<planningHome.root>/openspec/specs/<capability-path>/spec.md');
+      expect(content, variant).toContain('<planningHome.root>/openspec/specs/<capability-path>/spec.feature');
     }
   });
 
@@ -860,9 +848,9 @@ describe('skill templates split parity', () => {
         'copy those absolute values verbatim'
       );
       expect(content, variant).toContain('selecting the entry ending');
-      expect(content, variant).toContain('/specs/billing/invoices/spec.md');
+      expect(content, variant).toContain('/specs/billing/invoices/spec.feature');
       expect(content, variant).not.toContain('only sync the billing delta');
-      expect(content, variant).not.toContain('only sync `specs/billing/invoices/spec.md`');
+      expect(content, variant).not.toContain('only sync `specs/billing/invoices/spec.feature`');
 
       // Step 4 is the operative loop. Narrowing step 3 alone left the loop
       // still iterating "each path returned by the CLI", which re-widens the
@@ -1251,7 +1239,7 @@ describe('skill templates split parity', () => {
       expect(text, variant).toContain('do not modify the main spec');
       expect(text, variant).toMatch(/Stop\s+the sync for that capability/);
       expect(text, variant).toContain(
-        'Never write or leave an empty `## Requirements` section'
+        'Never write or leave a main spec with no rules'
       );
       expect(text, variant).not.toContain('any other sections');
       expect(text, variant).not.toContain('Loose prose left under `## Requirements` does NOT block');
@@ -1306,23 +1294,28 @@ describe('workflow guidance matches the packaged templates (#1138)', () => {
     ];
 
     for (const [surface, text] of surfaces) {
-      for (const artifactId of ['proposal', 'specs', 'design', 'tasks']) {
+      for (const artifactId of ['proposal', 'design', 'tasks']) {
         expect(text, `${surface} / ${artifactId}`).toContain(`\n${titles[artifactId]}\n`);
       }
+      // A spec is a feature file: its title is the `Feature:` line.
+      expect(titles.specs, 'specs template').toMatch(/^Feature: /);
+      expect(text, `${surface} / specs`).toMatch(/\nFeature: \S/);
     }
   });
 
   // The sync workflow prints a delta reference right beside the main-spec one.
-  // The two are only telling them apart if the delta carries its own title.
-  it('titles the delta spec in the sync format reference', () => {
+  // Both are feature files; the delta is the one whose rules carry operation tags.
+  it('shows both sync format references as feature files', () => {
     const titles = specDrivenTitles();
+    expect(titles.specs, 'specs template').toMatch(/^Feature: /);
 
     for (const [surface, text] of [
       ['sync skill', getSyncSpecsSkillTemplate().instructions],
       ['opsx sync command', getOpsxSyncCommandTemplate().content],
     ] as Array<[string, string]>) {
-      expect(text, surface).toContain(`\n${titles.specs}\n\n## Purpose\n`);
-      expect(text, surface).toContain('\n# <capability> Specification\n');
+      expect(text, surface).toContain('```gherkin\nFeature: <capability>\n  Only on a delta');
+      expect(text, surface).toContain('```gherkin\nFeature: <capability>\n  Short description');
+      expect(text, surface).toContain('\n  @modified @REQ-0012\n  Rule: Existing Feature\n');
     }
   });
 });

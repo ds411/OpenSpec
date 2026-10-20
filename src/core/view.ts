@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { getTaskProgressForChange, formatTaskStatus } from '../utils/task-progress.js';
-import { MarkdownParser } from './parsers/markdown-parser.js';
+import { parseSpecContent } from './gherkin/spec-model.js';
 import { discoverSpecFiles } from '../utils/spec-discovery.js';
 import { loadChangeContext, formatChangeStatus, type ChangeStatus } from './artifact-graph/index.js';
 
@@ -161,8 +161,7 @@ export class ViewCommand {
     for (const { id, specFile } of await discoverSpecFiles(specsDir)) {
       try {
         const content = fs.readFileSync(specFile, 'utf-8');
-        const parser = new MarkdownParser(content);
-        const spec = parser.parseSpec(id);
+        const spec = parseSpecContent(content, id);
         const requirementCount = spec.requirements.length;
         specs.push({ name: id, requirementCount });
       } catch (error) {

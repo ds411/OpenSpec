@@ -13,7 +13,7 @@ Sync delta specs from a change to main specs.
 
 This is an **agent-driven** operation - you will read delta specs and directly edit main specs to apply the changes. This allows intelligent merging (e.g., adding a scenario without copying the entire requirement).
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`, `ids assign`, `ids next`, `convert-specs`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
 
 **Project check:** These steps expect a project that already uses OpenSpec. Before the first step that writes anything (`new change`, `archive`, `sync specs`, or authoring an artifact file), confirm the project has a root: run `openspec list --json` (with `--store <id>` when a store is selected, since the store is then the root) and read `root`. A root object means the project is set up. `"root": null` means it is not - there is no `openspec/` directory here, and a write such as `openspec new change` would create one as a side effect. The command also exits non-zero, which is that answer rather than a broken CLI, so read the JSON instead of retrying or working around it.
 
@@ -64,7 +64,7 @@ In both branches, never create the root as a side effect: do not run `openspec i
    A caller narrows it by naming an explicit list of complete entries from
    `existingOutputPaths` — copy those absolute values verbatim. Archive does
    this inline, and a user can too (for example, by selecting the entry ending
-   in `/specs/billing/invoices/spec.md`).
+   in `/specs/billing/invoices/spec.feature`).
    Then sync only the named paths and leave the remaining delta specs untouched:
    bulk archive excludes a delta whose implementation it could not find, and
    syncing it anyway would write a main spec the caller deliberately withheld.
@@ -74,11 +74,13 @@ In both branches, never create the root as a side effect: do not run `openspec i
    empty, report that there is nothing to sync and stop without writing a main
    spec.
 
-   Each delta spec file contains sections like:
-   - `## ADDED Requirements` - New requirements to add
-   - `## MODIFIED Requirements` - Changes to existing requirements
-   - `## REMOVED Requirements` - Requirements to remove
-   - `## RENAMED Requirements` - Requirements to rename (FROM:/TO: format)
+   Each delta spec file is a Gherkin feature file. Each `Rule:` in it is one
+   requirement, with one operation tag on the line above it:
+   - `@added` - a new requirement to add
+   - `@modified` - a changed requirement; its ID tag (such as `@REQ-0042`)
+     names the main-spec requirement it replaces
+   - `@removed` - the main-spec requirement with that ID goes away
+   A rename is a `@modified` rule whose name differs from the main spec's.
 
    If no delta specs found, inform user and stop.
 
@@ -104,74 +106,79 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
    a. **Read the delta spec** to understand the intended changes
 
-   b. **Read the main spec** at `<planningHome.root>/openspec/specs/<capability-path>/spec.md` (may not exist yet)
+   b. **Read the main spec** at `<planningHome.root>/openspec/specs/<capability-path>/spec.feature` (may not exist yet)
 
       **If it does not exist yet** (a new capability), match what `openspec archive` does:
-      only ADDED requirements may be applied - step d creates the spec from them.
-      MODIFIED and RENAMED have no requirement to act on, so stop the sync for that
-      capability and report that its main spec does not exist and only ADDED is allowed
-      for a new spec; never invent the missing requirement. REMOVED has nothing to
-      remove - skip it and warn.
+      only `@added` rules may be applied - step d creates the spec from them.
+      `@modified` rules have no requirement to act on, so stop the sync for that
+      capability and report that its main spec does not exist and only `@added` is
+      allowed for a new spec; never invent the missing requirement. `@removed` has
+      nothing to remove - skip it and warn.
 
    c. **Apply changes intelligently**:
 
-      **ADDED Requirements:**
-      - If requirement doesn't exist in main spec → add it
-      - If requirement already exists → update it to match (treat as implicit MODIFIED)
+      Match each delta rule to the main spec by its requirement ID, never by its name.
 
-      **MODIFIED Requirements:**
-      - Find the requirement in main spec
+      **`@added` rules:**
+      - If the rule has no ID tag, run `openspec ids assign "<name>"` (same
+        selected-root flags) first. Never write an ID by hand.
+      - If no main-spec rule has its ID → add it at the end of the main spec, without the `@added` tag
+      - If a main-spec rule already has its ID → update it to match (treat as implicit `@modified`)
+
+      **`@modified` rules:**
+      - Find the main-spec rule with the same ID
       - Apply the changes - this can be:
         - Adding new scenarios the main spec does not have yet
         - Modifying existing scenarios
-        - Changing the requirement description
+        - Changing the requirement statement
+        - Renaming the requirement (the name after `Rule:`); the ID stays
+      - Remove a scenario only when the delta tags it `@removed`
       - Preserve scenarios/content not mentioned in the delta
+      - Keep the main-spec rule's own tags (its ID, and others such as `@notrace`); never copy `@modified` into the main spec
 
-      **REMOVED Requirements:**
-      - Remove the entire requirement block from main spec
-      - Retiring the capability. Delete the whole `spec.md` - and the directory once
+      **`@removed` rules:**
+      - Remove the main-spec rule with the same ID: its tag line, `Rule:` line, statement and scenarios
+      - Retiring the capability. Delete the whole `spec.feature` - and the directory once
         nothing else is left in it - only when ALL of these hold:
-        1. removing the requirements *this run* left no requirement blocks;
-        2. the rest of the spec is well-formed (it still has a `## Purpose`);
+        1. removing the requirements *this run* left no rules;
+        2. the rest of the spec is well-formed (it still has its `Feature:` line);
         3. the main spec was not already empty before this sync - if you removed
            nothing, change nothing;
         4. every other nonblank line in the whole file is accounted for as the
-           title, Purpose, Requirements header, or a canonical requirement's
-           statement, scenarios, or fenced examples;
+           `Feature:` line, the feature description (the Purpose), or a rule's
+           tags, statement, scenarios, steps or doc strings;
         5. the change's `.openspec.yaml` declares `retire_capabilities: true`;
-        6. the `spec.md` resolves inside the real specs root (do not follow a
+        6. the `spec.feature` resolves inside the real specs root (do not follow a
            capability-directory symlink to delete an external file).
-        If removing the selected requirements would leave no requirement blocks and
-        any retirement condition is not satisfied, do not modify the main spec. Stop
+        If removing the selected requirements would leave no rules and any
+        retirement condition is not satisfied, do not modify the main spec. Stop
         the sync for that capability, report the blocking condition, and tell the user
-        how to resolve it. Never write or leave an empty `## Requirements` section.
+        how to resolve it. Never write or leave a main spec with no rules.
         When only the marker is missing, say that too - it is the one thing the user
         can add to make the retirement go through.
-      - Deleting the file also deletes its `## Purpose`; any other section blocks
-        retirement. Name Purpose when you report the retirement. Include a pasteable
-        `git checkout` only when the spec lived in the caller's checkout;
-        otherwise give checkout-scoped recovery guidance.
+      - Deleting the file also deletes its Purpose (the feature description); any
+        other content blocks retirement. Name the Purpose when you report the
+        retirement. Include a pasteable `git checkout` only when the spec lived in
+        the caller's checkout; otherwise give checkout-scoped recovery guidance.
 
-      **RENAMED Requirements:**
-      - Find the FROM requirement, rename to TO
-
-      **`## Purpose` in the delta:**
+      **Feature description in the delta:**
       - The main spec already has one and it is authoritative - leave it alone
         (this is what `openspec archive` does; it warns and moves on)
 
    d. **Create new main spec** if capability doesn't exist yet:
-      - Only when the delta has ADDED requirements to put in it and no MODIFIED or
-        RENAMED requirements blocked this capability in step b. Otherwise create nothing
-        and leave the specs directory untouched. For a REMOVED-only delta, if the change's
+      - Only when the delta has `@added` rules to put in it and no `@modified`
+        rules blocked this capability in step b. Otherwise create nothing
+        and leave the specs directory untouched. For a `@removed`-only delta, if the change's
         `.openspec.yaml` declares `retire_capabilities: true`, report it as already retired
         and continue without recreating the spec. Without that marker, report the sync as blocked:
         `openspec archive` rejects it with `Spec must have at least one requirement`.
         An empty delta has no operations to sync; report it as blocked too.
-        Never write an empty `## Requirements` section.
-      - Create `<planningHome.root>/openspec/specs/<capability-path>/spec.md`
-      - Add Purpose section: copy the delta's `## Purpose` body verbatim when it has one
-        (this is what `openspec archive` does); only write a brief TBD placeholder when it does not
-      - Add Requirements section with the ADDED requirements
+        Never write a main spec with no rules.
+      - Create `<planningHome.root>/openspec/specs/<capability-path>/spec.feature`
+      - Start it with the delta's `Feature:` line. Copy the delta's feature description
+        verbatim as the Purpose when it has one (this is what `openspec archive` does);
+        only write a brief TBD placeholder when it does not
+      - Add the `@added` rules, without the `@added` tag
       - Follow the **Main Spec Format Reference** below
 
 5. **Validate updated main specs**
@@ -183,77 +190,70 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
    After applying all changes, summarize:
    - Which capabilities were updated
-   - What changes were made (requirements added/modified/removed/renamed)
+   - What changes were made (requirements added/modified/removed/renamed, each named with its ID)
    - Any new main spec left with a TBD Purpose placeholder, so it gets written
      now rather than lingering
-   - Any capability retired, naming the deleted `spec.md`, its Purpose, and
+   - Any capability retired, naming the deleted `spec.feature`, its Purpose, and
      either a pasteable `git checkout` or checkout-scoped recovery guidance
 
 **Delta Spec Format Reference**
 
-```markdown
-# Spec Delta
+```gherkin
+Feature: <capability>
+  Only on a delta that introduces a brand-new capability: this description
+  seeds the new main spec's Purpose.
 
-## Purpose
+  @added
+  Rule: New Feature
+    The system SHALL do something new.
 
-Only on a delta that introduces a brand-new capability. Seeds the new main spec.
+    Scenario: Basic case
+      When user does X
+      Then system does Y
 
-## ADDED Requirements
+  @modified @REQ-0012
+  Rule: Existing Feature
+    The system SHALL keep doing the existing thing, now also handling A.
 
-### Requirement: New Feature
-The system SHALL do something new.
+    Scenario: Scenario the main spec already has
+      When user does X
+      Then system does Y
 
-#### Scenario: Basic case
-- **WHEN** user does X
-- **THEN** system does Y
+    Scenario: New scenario to add
+      When user does A
+      Then system does B
 
-## MODIFIED Requirements
+    @removed
+    Scenario: Scenario to drop on purpose
+      When user does C
+      Then system does D
 
-### Requirement: Existing Feature
-The system SHALL keep doing the existing thing, now also handling A.
-
-#### Scenario: Scenario the main spec already has
-- **WHEN** user does X
-- **THEN** system does Y
-
-#### Scenario: New scenario to add
-- **WHEN** user does A
-- **THEN** system does B
-
-## REMOVED Requirements
-
-### Requirement: Deprecated Feature
-
-## RENAMED Requirements
-
-- FROM: `### Requirement: Old Name`
-- TO: `### Requirement: New Name`
+  @removed @REQ-0007
+  Rule: Deprecated Feature
+    Replaced by Existing Feature.
 ```
 
 **Main Spec Format Reference**
 
-Main specs are what the delta merges INTO. They must never contain delta operation headers (`## ADDED/MODIFIED/REMOVED/RENAMED Requirements`) - after syncing, every requirement lives under a single `## Requirements` section:
+Main specs are what the delta merges INTO. They must never contain operation tags (`@added`, `@modified`, `@removed`) - after syncing, each requirement is a `Rule:` that keeps only its own tags: its ID, and others such as `@notrace`:
 
-```markdown
-# <capability> Specification
+```gherkin
+Feature: <capability>
+  Short description of what this capability does and why it exists.
 
-## Purpose
-Short description of what this capability does and why it exists.
+  @REQ-0013
+  Rule: New Feature
+    The system SHALL do something new.
 
-## Requirements
-
-### Requirement: New Feature
-The system SHALL do something new.
-
-#### Scenario: Basic case
-- **WHEN** user does X
-- **THEN** system does Y
+    Scenario: Basic case
+      When user does X
+      Then system does Y
 ```
 
 **Key Principle: Intelligent Merging**
 
 Unlike programmatic merging, you merge rather than overwrite:
-- A MODIFIED block carries the whole requirement - body plus every scenario that survives the change. `openspec validate` and `openspec archive` both reject one that drops a scenario the main spec still has.
+- A `@modified` rule carries the whole requirement - statement plus every scenario that survives the change. `openspec validate` and `openspec archive` both reject one that drops a scenario the main spec still has, unless the delta tags that scenario `@removed`.
 - Keep anything the delta does not mention, in the main spec's existing order
 - Use your judgment to merge changes sensibly
 
@@ -265,12 +265,12 @@ Unlike programmatic merging, you merge rather than overwrite:
 Updated main specs:
 
 **<capability-1>**:
-- Added requirement: "New Feature"
-- Modified requirement: "Existing Feature" (added 1 scenario)
+- Added requirement REQ-0013: "New Feature"
+- Modified requirement REQ-0012: "Existing Feature" (added 1 scenario)
 
 **<capability-2>**:
 - Created new spec file
-- Added requirement: "Another Feature"
+- Added requirement REQ-0014: "Another Feature"
 
 Main specs are now updated. The change remains active - archive when implementation is complete.
 ```
@@ -278,7 +278,8 @@ Main specs are now updated. The change remains active - archive when implementat
 **Guardrails**
 - Read both delta and main specs before making changes
 - Preserve existing content not mentioned in delta
-- Never copy a delta file into a main spec as-is - merge its content so the main spec keeps the Main Spec Format Reference structure, with no delta operation headers
+- Never copy a delta file into a main spec as-is - merge its content so the main spec keeps the Main Spec Format Reference structure, with no operation tags
+- Match requirements by ID, never by name; never invent, change or reuse an ID
 - If something is unclear, ask for clarification
 - Show what you're changing as you go
 - The operation should be idempotent - running twice should give same result

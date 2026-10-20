@@ -39,13 +39,13 @@ spec-driven/
 ├── schema.yaml
 └── templates/
     ├── proposal.md
-    ├── spec.md
+    ├── spec.feature
     ├── design.md
     └── tasks.md
 ```
 
 - **schema.yaml**: declares each artifact, the file it generates, the template it starts from, what it requires first, and the instruction the agent receives when creating it. Every field's contract is in [schema.yaml](../reference/schemas/schema-yaml.md).
-- **templates/**: one markdown skeleton per artifact, which the agent fills in.
+- **templates/**: one skeleton per artifact, which the agent fills in: markdown for the documents, and a Gherkin feature file for specs.
 
 Here's the tasks artifact's entry in schema.yaml, trimmed:
 

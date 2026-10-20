@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { Validator } from '../../src/core/validation/validator.js';
 import { buildUpdatedSpec, findSpecUpdates } from '../../src/core/specs-apply.js';
+import { featureRule } from '../helpers/openspec-fixtures.js';
 
 /**
  * validate reports the deltas archive would refuse to apply (#1112).
@@ -19,22 +20,38 @@ describe('validate: deltas archive would refuse (#1112)', () => {
   let changesDir: string;
   let mainSpecsDir: string;
 
-  const REQUIREMENT = `### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported`;
+  const REQUIREMENT = featureRule({
+    id: 'REQ-0001',
+    name: 'Widget state',
+    statement: 'The system SHALL report the widget state.',
+    scenarios: [{ name: 'Existing scenario', steps: ['When queried', 'Then the state is reported'] }],
+  });
 
-  const mainSpec = (body: string) =>
-    `# widgets Specification\n\n## Purpose\nDefine widget behavior for these tests.\n\n## Requirements\n\n${body}\n`;
+  /** A rule for `name`, under `id`, with `tags`. */
+  const rule = (id: string, name: string, tags: string[] = []) =>
+    featureRule({
+      id,
+      tags,
+      name,
+      statement: `The system SHALL report the ${name.toLowerCase()}.`,
+      scenarios: [{ name: 'Queried', steps: ['When queried', 'Then reported'] }],
+    });
+
+  const mainSpec = (body: string) => `Feature: Widgets\n  Define widget behavior for these tests.\n\n${body}\n`;
+  const delta = (...rules: string[]) => `Feature: Widgets\n\n${rules.join('\n\n')}\n`;
+  const tagged = (tag: string, block: string) => block.replace(/^  @/, `  @${tag} @`);
 
   const writeMainSpec = async (id: string, body: string) => {
-    const file = path.join(mainSpecsDir, ...id.split('/'), 'spec.md');
+    const file = path.join(mainSpecsDir, ...id.split('/'), 'spec.feature');
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, mainSpec(body));
   };
 
-  const writeChange = async (changeName: string, specId: string, delta: string) => {
+  const writeChange = async (changeName: string, specId: string, content: string) => {
     const changeDir = path.join(changesDir, changeName);
     const specDir = path.join(changeDir, 'specs', ...specId.split('/'));
     await fs.mkdir(specDir, { recursive: true });
-    await fs.writeFile(path.join(specDir, 'spec.md'), delta);
+    await fs.writeFile(path.join(specDir, 'spec.feature'), content);
     return changeDir;
   };
 
@@ -73,7 +90,7 @@ describe('validate: deltas archive would refuse (#1112)', () => {
   });
 
   it('keeps strict validation valid when advisory discovery encounters a filesystem error', async () => {
-    const changeDir = await writeChange('c1', 'widgets', `## ADDED Requirements\n\n${REQUIREMENT}\n`);
+    const changeDir = await writeChange('c1', 'widgets', delta(tagged('added', REQUIREMENT)));
     const specsDir = realpathSync.native(path.join(changeDir, 'specs'));
     const readdir = fs.readdir;
     let discoveries = 0;
@@ -100,10 +117,10 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     ['dangling', true],
     ['dangling', false],
   ] as const)('preserves the validation report for a %s target link (valid delta: %s)', async (link, validDelta) => {
-    const body = validDelta ? REQUIREMENT : '### Requirement: Widget state\nThe system SHALL report the widget state.';
-    const changeDir = await writeChange('c1', 'widgets', `## ADDED Requirements\n\n${body}\n`);
-    const target = path.join(mainSpecsDir, 'widgets', 'spec.md');
-    const outside = path.join(testDir, 'outside.md');
+    const body = validDelta ? REQUIREMENT : '  @REQ-0001\n  Rule: Widget state\n    The system SHALL report the widget state.';
+    const changeDir = await writeChange('c1', 'widgets', delta(tagged('added', body)));
+    const target = path.join(mainSpecsDir, 'widgets', 'spec.feature');
+    const outside = path.join(testDir, 'outside.feature');
     if (link === 'outside') await fs.writeFile(outside, mainSpec(REQUIREMENT));
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.symlink(outside, target);
@@ -120,7 +137,7 @@ describe('validate: deltas archive would refuse (#1112)', () => {
       }));
       if (!validDelta) {
         expect(report.issues).toContainEqual(expect.objectContaining({
-          level: 'ERROR', path: 'widgets/spec.md', message: expect.stringContaining('must include at least one scenario'),
+          level: 'ERROR', path: 'widgets/spec.feature', message: expect.stringContaining('must include at least one scenario'),
         }));
       }
     }
@@ -129,11 +146,11 @@ describe('validate: deltas archive would refuse (#1112)', () => {
   });
 
   it.skipIf(process.platform === 'win32')('still refuses an unsafe delta source before the advisory check', async () => {
-    const changeDir = await writeChange('c1', 'widgets', `## ADDED Requirements\n\n${REQUIREMENT}\n`);
-    const delta = path.join(changeDir, 'specs', 'widgets', 'spec.md');
-    const outside = path.join(testDir, 'outside-delta.md');
-    await fs.rename(delta, outside);
-    await fs.symlink(outside, delta);
+    const changeDir = await writeChange('c1', 'widgets', delta(tagged('added', REQUIREMENT)));
+    const deltaFile = path.join(changeDir, 'specs', 'widgets', 'spec.feature');
+    const outside = path.join(testDir, 'outside-delta.feature');
+    await fs.rename(deltaFile, outside);
+    await fs.symlink(outside, deltaFile);
     await expect(validate(changeDir)).rejects.toThrow('Path is outside the allowed directory');
   });
 
@@ -141,7 +158,7 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     'does not misreport a target read failure (%s) as a missing requirement',
     async (code) => {
       await writeMainSpec('widgets', REQUIREMENT);
-      const changeDir = await writeChange('c1', 'widgets', `## MODIFIED Requirements\n\n${REQUIREMENT}\n`);
+      const changeDir = await writeChange('c1', 'widgets', delta(tagged('modified', REQUIREMENT)));
       const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
       const target = realpathSync.native(update.target);
       const readFile = fs.readFile;
@@ -159,35 +176,25 @@ describe('validate: deltas archive would refuse (#1112)', () => {
   );
 
   it.each([
-    ['already-synced addition', `## ADDED Requirements\n\n${REQUIREMENT}\n`],
-    ['already-synced removal', '## REMOVED Requirements\n\n### Requirement: Gone\n'],
-  ])('stays silent on an %s', async (_name, delta) => {
+    ['already-synced addition', delta(tagged('added', REQUIREMENT))],
+    ['already-synced modification', delta(tagged('modified', REQUIREMENT))],
+    ['already-synced removal', delta('  @removed @REQ-0009\n  Rule: Gone')],
+  ])('stays silent on an %s', async (_name, content) => {
     await writeMainSpec('widgets', REQUIREMENT);
-    const changeDir = await writeChange('c1', 'widgets', delta);
+    const changeDir = await writeChange('c1', 'widgets', content);
     expect(blocker(await validate(changeDir))).toBeUndefined();
     expect(await archiveError(changeDir)).toBeNull();
   });
 
-  it('reports a rename target collision', async () => {
-    await writeMainSpec('widgets', `${REQUIREMENT}\n\n${REQUIREMENT.replace('Widget state', 'Gadget state')}`);
-    const changeDir = await writeChange('c1', 'widgets', '## RENAMED Requirements\n\n- FROM: `### Requirement: Widget state`\n- TO: `### Requirement: Gadget state`\n');
-    const error = await archiveError(changeDir);
-    expect(error).toContain('already exists');
-    expect(blocker(await validate(changeDir))?.message).toBe(`Archive would refuse this delta: ${error}`);
-  });
-
-  it.each([
-    ['MODIFIED', `## MODIFIED Requirements\n\n${REQUIREMENT}\n`],
-    ['RENAMED', '## RENAMED Requirements\n\n- FROM: `### Requirement: Widget state`\n- TO: `### Requirement: Gadget state`\n'],
-  ])('reports %s against a capability that does not exist', async (_operation, delta) => {
-    const changeDir = await writeChange('c1', 'new-capability', delta);
+  it('reports @modified against a capability that does not exist', async () => {
+    const changeDir = await writeChange('c1', 'new-capability', delta(tagged('modified', REQUIREMENT)));
     const error = await archiveError(changeDir);
     expect(error).toContain('target spec does not exist');
     expect(blocker(await validate(changeDir))?.message).toBe(`Archive would refuse this delta: ${error}`);
   });
 
   it('keeps library validation unchanged when mainSpecsDir is omitted', async () => {
-    const changeDir = await writeChange('c1', 'widgets', `## MODIFIED Requirements\n\n${REQUIREMENT}\n`);
+    const changeDir = await writeChange('c1', 'widgets', delta(tagged('modified', REQUIREMENT)));
     const report = await new Validator(true).validateChangeDeltaSpecs(changeDir);
     expect(report.valid).toBe(true);
     expect(blocker(report)).toBeUndefined();
@@ -200,7 +207,7 @@ describe('validate: deltas archive would refuse (#1112)', () => {
       path.join(mainSpecsDir, 'widgets-alias'),
       process.platform === 'win32' ? 'junction' : 'dir'
     );
-    const changeDir = await writeChange('c1', 'widgets-alias', `## ADDED Requirements\n\n${REQUIREMENT.replace('Widget state', 'Gadget state')}\n`);
+    const changeDir = await writeChange('c1', 'widgets-alias', delta(rule('REQ-0002', 'Gadget state', ['added'])));
     const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
     const target = realpathSync.native(update.target);
     // Keep distinct path spellings so this exercises both reads of the same file.
@@ -217,20 +224,20 @@ describe('validate: deltas archive would refuse (#1112)', () => {
 
   it('reports a nested capability without suppressing findings for other files', async () => {
     await writeMainSpec('area/widgets', REQUIREMENT);
-    const changeDir = await writeChange('c1', 'area/widgets', `## MODIFIED Requirements\n\n${REQUIREMENT.replace('Widget state', 'Missing')}\n`);
-    await writeChange('c1', 'invalid', '## ADDED Requirements\n\nNo entries.\n');
+    const changeDir = await writeChange('c1', 'area/widgets', delta(rule('REQ-0002', 'Missing', ['modified'])));
+    await writeChange('c1', 'invalid', 'Feature: Invalid\n  No entries.\n');
     const report = await validate(changeDir);
     expect(report.issues.filter((issue) => issue.level === 'INFO')).toEqual([
-      expect.objectContaining({ path: 'area/widgets/spec.md', message: `Archive would refuse this delta: ${await archiveError(changeDir)}` }),
+      expect.objectContaining({ path: 'area/widgets/spec.feature', message: `Archive would refuse this delta: ${await archiveError(changeDir)}` }),
     ]);
   });
 
   it('does not create or rewrite spec files or print merge warnings', async () => {
     await writeMainSpec('widgets', REQUIREMENT);
-    const changeDir = await writeChange('c1', 'widgets', `## ADDED Requirements\n\n${REQUIREMENT}\n`);
-    await writeChange('c1', 'new-capability', `## ADDED Requirements\n\n${REQUIREMENT}\n`);
-    const mainFile = path.join(mainSpecsDir, 'widgets', 'spec.md');
-    const deltaFile = path.join(changeDir, 'specs', 'widgets', 'spec.md');
+    const changeDir = await writeChange('c1', 'widgets', delta(tagged('added', REQUIREMENT)));
+    await writeChange('c1', 'new-capability', delta(tagged('added', REQUIREMENT)));
+    const mainFile = path.join(mainSpecsDir, 'widgets', 'spec.feature');
+    const deltaFile = path.join(changeDir, 'specs', 'widgets', 'spec.feature');
     const before = await Promise.all([fs.readFile(mainFile, 'utf8'), fs.readFile(deltaFile, 'utf8')]);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await validate(changeDir);
@@ -244,11 +251,11 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     const changeDir = await writeChange(
       'c1',
       'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Gadget state\nThe system SHALL report the gadget state.\n\n#### Scenario: Queried\n- **WHEN** queried\n- **THEN** reported\n`
+      delta(rule('REQ-0002', 'Gadget state', ['modified']))
     );
 
     const issue = blocker(await validate(changeDir));
-    expect(issue?.message).toContain('MODIFIED failed for header "### Requirement: Gadget state"');
+    expect(issue?.message).toContain('@modified failed for REQ-0002 ("Gadget state") - not found in the current spec');
     expect(await archiveError(changeDir)).not.toBeNull();
   });
 
@@ -257,22 +264,10 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     const changeDir = await writeChange(
       'c1',
       'widgets',
-      `## ADDED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state twice.\n\n#### Scenario: Queried\n- **WHEN** queried\n- **THEN** reported\n`
+      delta(rule('REQ-0001', 'Widget state twice', ['added']))
     );
 
-    expect(blocker(await validate(changeDir))?.message).toContain('already exists');
-    expect(await archiveError(changeDir)).not.toBeNull();
-  });
-
-  it('reports a RENAMED whose source is not in the main spec', async () => {
-    await writeMainSpec('widgets', REQUIREMENT);
-    const changeDir = await writeChange(
-      'c1',
-      'widgets',
-      `## RENAMED Requirements\n\n- FROM: \`### Requirement: Gadget state\`\n- TO: \`### Requirement: Doodad state\`\n`
-    );
-
-    expect(blocker(await validate(changeDir))?.message).toContain('source not found');
+    expect(blocker(await validate(changeDir))?.message).toContain('the spec already has a requirement with this ID');
     expect(await archiveError(changeDir)).not.toBeNull();
   });
 
@@ -281,7 +276,7 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     const changeDir = await writeChange(
       'c1',
       'widgets',
-      `## ADDED Requirements\n\n### Requirement: Gadget state\nThe system SHALL report the gadget state.\n\n#### Scenario: Queried\n- **WHEN** queried\n- **THEN** reported\n`
+      delta(rule('REQ-0002', 'Gadget state', ['added']))
     );
 
     expect(blocker(await validate(changeDir))).toBeUndefined();
@@ -289,15 +284,10 @@ describe('validate: deltas archive would refuse (#1112)', () => {
   });
 
   it('stays silent on a rename the baseline already absorbed', async () => {
-    // Source gone, target present: specs-apply reads this as an early-synced
-    // rename and applies it as a no-op. A preflight with its own copy of the
-    // rules would call it a missing source and fail a change that archives.
-    await writeMainSpec('widgets', REQUIREMENT.replace('Widget state', 'Doodad state'));
-    const changeDir = await writeChange(
-      'c1',
-      'widgets',
-      `## RENAMED Requirements\n\n- FROM: \`### Requirement: Widget state\`\n- TO: \`### Requirement: Doodad state\`\n`
-    );
+    // A rename is a @modified rule with a new name, matched by ID. When sync
+    // already applied it, archive treats it as a no-op.
+    await writeMainSpec('widgets', rule('REQ-0001', 'Doodad state'));
+    const changeDir = await writeChange('c1', 'widgets', delta(rule('REQ-0001', 'Doodad state', ['modified'])));
 
     expect(blocker(await validate(changeDir))).toBeUndefined();
     expect(await archiveError(changeDir)).toBeNull();
@@ -307,7 +297,7 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     const changeDir = await writeChange(
       'c1',
       'gizmos',
-      `## ADDED Requirements\n\n### Requirement: Gizmo state\nThe system SHALL report the gizmo state.\n\n#### Scenario: Queried\n- **WHEN** queried\n- **THEN** reported\n`
+      delta(rule('REQ-0005', 'Gizmo state', ['added']))
     );
 
     expect(blocker(await validate(changeDir))).toBeUndefined();
@@ -319,10 +309,10 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     const changeDir = await writeChange(
       'c1',
       'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Gadget state\nThe system SHALL report the gadget state.\n\n#### Scenario: Queried\n- **WHEN** queried\n- **THEN** reported\n`
+      delta(rule('REQ-0002', 'Gadget state', ['modified']))
     );
 
-    // The same shape is a typo'd header and a change modifying a sibling's
+    // The same shape is a typo'd ID and a change modifying a sibling's
     // unarchived requirement, and validate stays valid for the second one
     // today. Telling the two apart needs the opt-in marker #1112 asks for, so
     // this reports the collision and leaves the verdict where it was.
@@ -333,34 +323,25 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     }
   });
 
-  it('does not restate a delta with no parsed sections, reported after the loop', async () => {
-    // missingHeaderSpecs / emptySectionSpecs are collected inside the loop but
-    // their errors are pushed after it, so a preflight keyed on issues raised
+  it('does not restate a delta with no rules, reported after the loop', async () => {
+    // emptySpecs are collected inside the loop but their errors are pushed
+    // after it, so a preflight keyed on issues raised
     // so far would not see them and would add a second finding for a file the
     // validator is about to name properly.
     await writeMainSpec('widgets', REQUIREMENT);
-    const changeDir = await writeChange('c1', 'widgets', '# notes\n\nNo delta headers here.\n');
+    const changeDir = await writeChange('c1', 'widgets', 'Feature: Widgets\n  Notes only, no rules here.\n');
 
     const report = await validate(changeDir);
-    expect(report.issues.some((i) => i.message.startsWith('No delta sections found'))).toBe(true);
+    expect(report.issues.some((i) => i.message.startsWith('No delta rules found'))).toBe(true);
     expect(blocker(report)).toBeUndefined();
   });
 
   it.skipIf(process.platform === 'win32')('uses the same display path when suppressing malformed deltas with a literal backslash', async () => {
-    const changeDir = await writeChange('c1', 'area\\widgets', '# Notes\n\nNo delta headers.\n');
+    const changeDir = await writeChange('c1', 'area\\widgets', 'Feature: Widgets\n  Notes only.\n');
     const report = await validate(changeDir);
     expect(report.issues).toContainEqual(expect.objectContaining({
-      level: 'ERROR', path: 'area/widgets/spec.md', message: expect.stringContaining('No delta sections found'),
+      level: 'ERROR', path: 'area/widgets/spec.feature', message: expect.stringContaining('No delta rules found'),
     }));
-    expect(blocker(report)).toBeUndefined();
-  });
-
-  it('does not restate a section that parsed no requirement entries', async () => {
-    await writeMainSpec('widgets', REQUIREMENT);
-    const changeDir = await writeChange('c1', 'widgets', '## ADDED Requirements\n\nNothing here.\n');
-
-    const report = await validate(changeDir);
-    expect(report.issues.some((i) => i.message.includes('no requirement entries parsed'))).toBe(true);
     expect(blocker(report)).toBeUndefined();
   });
 
@@ -369,13 +350,9 @@ describe('validate: deltas archive would refuse (#1112)', () => {
     // dropped scenario; buildUpdatedSpec throws on it too, a few steps later.
     await writeMainSpec(
       'widgets',
-      `${REQUIREMENT}\n\n#### Scenario: Second scenario\n- **WHEN** idle\n- **THEN** idle is reported`
+      `${REQUIREMENT}\n\n    Scenario: Second scenario\n      When idle\n      Then idle is reported`
     );
-    const changeDir = await writeChange(
-      'c1',
-      'widgets',
-      `## MODIFIED Requirements\n\n### Requirement: Widget state\nThe system SHALL report the widget state.\n\n#### Scenario: Existing scenario\n- **WHEN** queried\n- **THEN** the state is reported\n`
-    );
+    const changeDir = await writeChange('c1', 'widgets', delta(tagged('modified', REQUIREMENT)));
 
     const report = await validate(changeDir);
     expect(report.issues.some((i) => i.level === 'ERROR')).toBe(true);

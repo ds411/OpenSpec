@@ -21,8 +21,8 @@ describe('generateApplyInstructions task list', () => {
     fs.writeFileSync(path.join(changeDir, '.openspec.yaml'), 'schema: spec-driven\n');
     fs.writeFileSync(path.join(changeDir, 'proposal.md'), '## Why\nx\n');
     fs.writeFileSync(
-      path.join(changeDir, 'specs', 'demo', 'spec.md'),
-      '## ADDED Requirements\n\n### Requirement: Demo\nThe system SHALL demo.\n\n#### Scenario: Works\n- **WHEN** run\n- **THEN** works\n'
+      path.join(changeDir, 'specs', 'demo', 'spec.feature'),
+      'Feature: Demo\n\n  @added @REQ-0001\n  Rule: Demo\n    The system SHALL demo.\n\n    Scenario: Works\n      When run\n      Then works\n'
     );
   });
 
@@ -215,7 +215,7 @@ ${tracked ? '  tracks: checklist.md\n' : ''}`
 
   it('returns existing spec and design paths even when their files contain no evidence', async () => {
     writeTasks('- [x] Finished task\n');
-    const spec = path.join(changeDir, 'specs', 'demo', 'spec.md');
+    const spec = path.join(changeDir, 'specs', 'demo', 'spec.feature');
     const design = path.join(changeDir, 'design.md');
     fs.writeFileSync(spec, '');
     fs.writeFileSync(design, '');

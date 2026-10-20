@@ -14,14 +14,15 @@ describe('openspec validate checks task checkbox formatting (#354)', () => {
   };
 
   const validDelta = [
-    '## ADDED Requirements',
+    'Feature: Tasks',
     '',
-    '### Requirement: Task lists SHALL be machine readable',
-    'The validator SHALL report task lists that progress cannot count.',
+    '  @added @REQ-0001',
+    '  Rule: Task lists SHALL be machine readable',
+    '    The validator SHALL report task lists that progress cannot count.',
     '',
-    '#### Scenario: Validate a bullet-only task list',
-    '- **WHEN** validation runs on a task file without checkboxes',
-    '- **THEN** the change is reported as counting zero tasks',
+    '    Scenario: Validate a bullet-only task list',
+    '      When validation runs on a task file without checkboxes',
+    '      Then the change is reported as counting zero tasks',
     '',
   ].join('\n');
 
@@ -82,7 +83,7 @@ describe('openspec validate checks task checkbox formatting (#354)', () => {
   beforeAll(async () => {
     projectDir = await fs.mkdtemp(path.join(tmpdir(), 'openspec-task-checkboxes-e2e-'));
 
-    await write('openspec/changes/bullet-tasks/specs/tasks/spec.md', validDelta);
+    await write('openspec/changes/bullet-tasks/specs/tasks/spec.feature', validDelta);
     await write(
       'openspec/changes/bullet-tasks/tasks.md',
       ['# Tasks', '', '## 1. Implementation', '', '- Add the parser', '- Add the tests', ''].join(
@@ -90,7 +91,7 @@ describe('openspec validate checks task checkbox formatting (#354)', () => {
       )
     );
 
-    await write('openspec/changes/checkbox-tasks/specs/tasks/spec.md', validDelta);
+    await write('openspec/changes/checkbox-tasks/specs/tasks/spec.feature', validDelta);
     await write(
       'openspec/changes/checkbox-tasks/tasks.md',
       ['## 1. Implementation', '', '- [ ] 1.1 Add the parser', '- A supporting note', ''].join('\n')
@@ -98,23 +99,23 @@ describe('openspec validate checks task checkbox formatting (#354)', () => {
 
     await write('openspec/schemas/glob-tasks/schema.yaml', globTasksSchema);
     await write('openspec/changes/nested-bullets/.openspec.yaml', 'schema: glob-tasks\n');
-    await write('openspec/changes/nested-bullets/specs/tasks/spec.md', validDelta);
+    await write('openspec/changes/nested-bullets/specs/tasks/spec.feature', validDelta);
     await write('openspec/changes/nested-bullets/backend/tasks.md', '- build the api\n');
     await write('openspec/changes/nested-bullets/frontend/tasks.md', '- [ ] 2.1 build the ui\n');
 
     await write('openspec/changes/nested-all-bullets/.openspec.yaml', 'schema: glob-tasks\n');
-    await write('openspec/changes/nested-all-bullets/specs/tasks/spec.md', validDelta);
+    await write('openspec/changes/nested-all-bullets/specs/tasks/spec.feature', validDelta);
     await write('openspec/changes/nested-all-bullets/backend/tasks.md', '- build the api\n');
     await write('openspec/changes/nested-all-bullets/frontend/tasks.md', '- build the ui\n');
 
     await write('openspec/schemas/implicit-tasks/schema.yaml', implicitTasksSchema);
     await write('openspec/changes/implicit-tracking/.openspec.yaml', 'schema: implicit-tasks\n');
-    await write('openspec/changes/implicit-tracking/specs/tasks/spec.md', validDelta);
+    await write('openspec/changes/implicit-tracking/specs/tasks/spec.feature', validDelta);
     await write('openspec/changes/implicit-tracking/tasks.md', '- build the api\n');
 
     await write('openspec/schemas/no-tasks-artifact/schema.yaml', untrackedTasksSchema);
     await write('openspec/changes/untracked-tasks/.openspec.yaml', 'schema: no-tasks-artifact\n');
-    await write('openspec/changes/untracked-tasks/specs/tasks/spec.md', validDelta);
+    await write('openspec/changes/untracked-tasks/specs/tasks/spec.feature', validDelta);
     await write('openspec/changes/untracked-tasks/tasks.md', '- an untracked bullet\n');
   });
 
@@ -241,7 +242,7 @@ describe('openspec validate checks task checkbox formatting (#354)', () => {
       };
       await writeIn('openspec/schemas/glob-tasks/schema.yaml', globTasksSchema);
       await writeIn('openspec/changes/half-read/.openspec.yaml', 'schema: glob-tasks\n');
-      await writeIn('openspec/changes/half-read/specs/tasks/spec.md', validDelta);
+      await writeIn('openspec/changes/half-read/specs/tasks/spec.feature', validDelta);
       await writeIn('openspec/changes/half-read/backend/tasks.md', '- build the api\n');
       const locked = await writeIn(
         'openspec/changes/half-read/frontend/tasks.md',

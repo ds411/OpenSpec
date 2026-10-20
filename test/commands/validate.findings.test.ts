@@ -28,17 +28,29 @@ describe('validate findings reports', () => {
     await fs.writeFile(filename, contents);
   }
 
+  function rule(body: string, tags: string): string {
+    return `  ${tags}\n  Rule: Example behavior\n    ${body}\n\n    Scenario: Normal request\n      When requested\n      Then the documented result is returned\n`;
+  }
+
   function delta(body = 'The feature SHALL return its documented result.'): string {
-    return `## ADDED Requirements\n### Requirement: Example behavior\n${body}\n\n#### Scenario: Normal request\n- **WHEN** requested\n- **THEN** the documented result is returned\n`;
+    return `Feature: Example\n\n${rule(body, '@added @REQ-0001')}`;
+  }
+
+  /** A delta archive would refuse, which validate reports as INFO: @modified on a capability with no main spec. */
+  function infoDelta(): string {
+    return `Feature: Example\n\n${rule('The feature SHALL return its documented result.', '@modified @REQ-0001')}`;
   }
 
   async function seed(): Promise<void> {
-    await write('openspec/changes/a-clean/specs/example/spec.md', delta());
-    await write('openspec/changes/b-warning/specs/example/spec.md', delta('The feature returns its documented result.'));
-    await write('openspec/changes/c-info/specs/example/spec.md', `${delta()}\n### Notes\nNon-requirement notes.\n`);
+    await write('openspec/changes/a-clean/specs/example/spec.feature', delta());
+    await write('openspec/changes/b-warning/specs/example/spec.feature', delta('The feature returns its documented result.'));
+    await write('openspec/changes/c-info/specs/example/spec.feature', infoDelta());
     await fs.mkdir(path.join(root.changesDir, 'd-error'));
-    await write('openspec/specs/clean/spec.md', `## Purpose\nThis specification defines a deterministic example for testing validation output contracts.\n\n## Requirements\n${delta().replace('## ADDED Requirements\n', '')}`);
-    await write('openspec/specs/error/spec.md', '# Invalid specification\n');
+    await write(
+      'openspec/specs/clean/spec.feature',
+      `Feature: Clean\n  This specification defines a deterministic example for testing validation output contracts.\n\n${rule('The feature SHALL return its documented result.', '@REQ-0001')}`
+    );
+    await write('openspec/specs/error/spec.feature', '# Invalid specification\n');
     await write('openspec/changes/archive/a-clean/tasks.md', '- [x] 1.1 Done\n');
     await write('openspec/changes/archive/b-error/tasks.md', '- [ ] 1.1 Pending\n');
   }
@@ -137,7 +149,7 @@ describe('validate findings reports', () => {
   });
 
   it.each([false, true])('preserves warning-only exit status without errors (strict=%s)', async (strict) => {
-    await write('openspec/changes/warning/specs/example/spec.md', delta('The feature returns its documented result.'));
+    await write('openspec/changes/warning/specs/example/spec.feature', delta('The feature returns its documented result.'));
     const full = await json({ changes: true, strict });
     const findings = await json({ changes: true, strict, report: 'findings' });
     expect(findings.document.itemFindings).toHaveLength(1);
@@ -146,7 +158,7 @@ describe('validate findings reports', () => {
   });
 
   it('keeps an INFO-only strict run successful while displaying its finding', async () => {
-    await write('openspec/changes/info/specs/example/spec.md', `${delta()}\n### Notes\nNon-requirement notes.\n`);
+    await write('openspec/changes/info/specs/example/spec.feature', infoDelta());
     const findings = await json({ changes: true, strict: true, report: 'findings' });
     expect(findings.document.itemFindings).toHaveLength(1);
     expect(findings.document.itemFindings[0].issues[0].level).toBe('INFO');
@@ -199,7 +211,7 @@ describe('validate findings reports', () => {
   });
 
   it('distinguishes a clean non-empty scope from an empty scope', async () => {
-    await write('openspec/changes/clean/specs/example/spec.md', delta());
+    await write('openspec/changes/clean/specs/example/spec.feature', delta());
     const result = await json({ changes: true, report: 'findings' });
     expect(result.document.report).toMatchObject({ returnedItems: 0, totalItems: 1, scope: 'changes' });
     expect(result.document.itemFindings).toEqual([]);
@@ -260,7 +272,7 @@ describe('validate findings reports', () => {
   describe('a namespace folder holding nested changes (#1846)', () => {
     async function seedNamespaceFolder(): Promise<void> {
       await write('openspec/changes/mobile/refresh-token/proposal.md', '# Refresh token\n');
-      await write('openspec/changes/mobile/refresh-token/specs/example/spec.md', delta());
+      await write('openspec/changes/mobile/refresh-token/specs/example/spec.feature', delta());
     }
 
     it('reports the nesting instead of a missing delta, in the bulk sweep', async () => {
@@ -301,7 +313,7 @@ describe('validate findings reports', () => {
     });
 
     it('leaves an ordinary change with delta specs untouched', async () => {
-      await write('openspec/changes/add-auth/specs/example/spec.md', delta());
+      await write('openspec/changes/add-auth/specs/example/spec.feature', delta());
 
       const { document } = await json({ changes: true });
 
@@ -313,7 +325,7 @@ describe('validate findings reports', () => {
   });
 
   it('projects whole records in input order without modifying the full report', () => {
-    const issue = { level: 'INFO' as const, path: path.join('nested', 'spec.md'), message: 'Informational', line: 7 };
+    const issue = { level: 'INFO' as const, path: path.join('nested', 'spec.feature'), message: 'Informational', line: 7 };
     const clean = { id: 'clean', type: 'change' as const, valid: true, issues: [], durationMs: 1 };
     const first = { ...clean, id: 'z-first', issues: [issue], futureField: { preserved: true } };
     const second = { ...first, id: 'a-second', valid: false };

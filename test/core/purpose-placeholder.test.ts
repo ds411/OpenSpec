@@ -4,6 +4,8 @@ import {
   PURPOSE_PLACEHOLDER_PREFIX,
   PURPOSE_PLACEHOLDER_SUFFIX,
 } from '../../src/core/validation/constants.js';
+import { parseFeature } from '../../src/core/gherkin/document.js';
+import { featureSpec } from '../helpers/openspec-fixtures.js';
 
 /** Built the way archive builds it, so the test cannot drift from the writer. */
 const placeholderFor = (changeName: string) =>
@@ -11,43 +13,39 @@ const placeholderFor = (changeName: string) =>
 
 const ARCHIVE_TEXT = placeholderFor('add-retry-budget');
 
-const specWith = (purpose: string) =>
-  [
-    '# widgets Specification',
-    '',
-    '## Purpose',
-    purpose,
-    '',
-    '## Requirements',
-    '### Requirement: Retries are bounded',
-    'The system SHALL stop retrying a delivery after the configured budget.',
-    '',
-    '#### Scenario: Budget exhausted',
-    '- **WHEN** the budget is exhausted',
-    '- **THEN** the delivery is abandoned',
-    '',
-  ].join('\n');
+const specText = (purpose: string) =>
+  featureSpec('Widgets', purpose, [
+    {
+      id: 'REQ-0001',
+      name: 'Retries are bounded',
+      statement: 'The system SHALL stop retrying a delivery after the configured budget.',
+      scenarios: [{ name: 'Budget exhausted', steps: ['When the budget is exhausted', 'Then the delivery is abandoned'] }],
+    },
+  ]);
+
+/** The parsed spec; its Purpose (the feature description) starts on line 2. */
+const specWith = (purpose: string) => parseFeature(specText(purpose));
 
 describe('findPurposePlaceholderIssue', () => {
   describe('reports a placeholder', () => {
     it('reports the sentence archive writes, and points at it', () => {
       expect(findPurposePlaceholderIssue(ARCHIVE_TEXT, specWith(ARCHIVE_TEXT))).toEqual({
-        line: 4,
+        line: 2,
       });
     });
 
     it('reports it for any change name, since the name is what varies', () => {
       const purpose = placeholderFor('2026-01-15-my-change');
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 4 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 2 });
     });
 
     it('reports a bare TBD an agent wrote instead of the archive wording', () => {
-      expect(findPurposePlaceholderIssue('TBD', specWith('TBD'))).toEqual({ line: 4 });
+      expect(findPurposePlaceholderIssue('TBD', specWith('TBD'))).toEqual({ line: 2 });
     });
 
     it('reports a TBD opening a longer placeholder sentence', () => {
       const purpose = 'TBD: fill this in once the capability settles down.';
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 4 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 2 });
     });
 
     it('ignores case in the leading marker', () => {
@@ -56,12 +54,12 @@ describe('findPurposePlaceholderIssue', () => {
     });
 
     it('reports a bare TODO, the other word for the same non-answer', () => {
-      expect(findPurposePlaceholderIssue('TODO', specWith('TODO'))).toEqual({ line: 4 });
+      expect(findPurposePlaceholderIssue('TODO', specWith('TODO'))).toEqual({ line: 2 });
     });
 
     it('reports a TODO opening a longer placeholder sentence', () => {
       const purpose = 'TODO: describe what this capability is for.';
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 4 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 2 });
     });
 
     it('ignores case in a leading TODO too', () => {
@@ -80,7 +78,7 @@ describe('findPurposePlaceholderIssue', () => {
       // The warning says "this Purpose is still the placeholder". Pointing at a
       // line the reader can see is fine reads as the check being wrong.
       const purpose = `Handles widget retries.\n\n${ARCHIVE_TEXT}`;
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 6 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 4 });
     });
 
     it('does not point at an authored prefix above the complete placeholder', () => {
@@ -90,7 +88,7 @@ describe('findPurposePlaceholderIssue', () => {
         ARCHIVE_TEXT,
       ].join('\n');
 
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 6 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 4 });
     });
 
     it('does not pair an unrelated suffix above the complete placeholder', () => {
@@ -100,7 +98,7 @@ describe('findPurposePlaceholderIssue', () => {
         ARCHIVE_TEXT,
       ].join('\n');
 
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 6 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 4 });
     });
 
     it('reports a placeholder the author padded with whitespace', () => {
@@ -239,71 +237,31 @@ describe('findPurposePlaceholderIssue', () => {
       // happens to contain a fence.
       const purpose = [fenced('an unrelated example'), '', ARCHIVE_TEXT].join('\n');
 
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 8 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 6 });
     });
 
     it('names the unfenced line, skipping a fenced copy above it', () => {
       const purpose = [fenced(ARCHIVE_TEXT), '', ARCHIVE_TEXT].join('\n');
 
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 8 });
-    });
-
-    it('finds the real Purpose header, not one quoted in a fence above it', () => {
-      // A spec whose preamble shows what a spec looks like has a `## Purpose`
-      // in it that is not this spec's. Starting the scan there walks straight
-      // into the real header and reports no line at all.
-      const content = [
-        '# widgets Specification',
-        '',
-        'Every capability spec opens like this:',
-        '',
-        '```',
-        '## Purpose',
-        'TBD',
-        '```',
-        '',
-        '## Purpose',
-        ARCHIVE_TEXT,
-        '',
-        '## Requirements',
-        '### Requirement: Retries are bounded',
-        'The system SHALL stop retrying a delivery after the configured budget.',
-        '',
-        '#### Scenario: Budget exhausted',
-        '- **WHEN** the budget is exhausted',
-        '- **THEN** the delivery is abandoned',
-        '',
-      ].join('\n');
-
-      expect(findPurposePlaceholderIssue(ARCHIVE_TEXT, content)).toEqual({ line: 11 });
-    });
-
-    it('does not let a fenced heading end the Purpose section early', () => {
-      // `## Requirements` inside a fence is an example of a spec, not the start
-      // of this one's requirements - so the locator must read past it.
-      const purpose = [fenced('## Requirements'), '', ARCHIVE_TEXT].join('\n');
-
-      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 8 });
+      expect(findPurposePlaceholderIssue(purpose, specWith(purpose))).toEqual({ line: 6 });
     });
   });
 
   describe('locating the placeholder', () => {
-    it('skips blank lines between the header and the text', () => {
-      const content = ['# widgets Specification', '', '## Purpose', '', '', 'TBD', ''].join('\n');
-      expect(findPurposePlaceholderIssue('TBD', content)).toEqual({ line: 6 });
+    it('skips blank lines between the Feature line and the text', () => {
+      const content = parseFeature(['Feature: Widgets', '', '', '  TBD', ''].join('\n'));
+      expect(findPurposePlaceholderIssue('TBD', content)).toEqual({ line: 4 });
     });
 
     it('counts lines the same way with CRLF endings', () => {
-      const content = specWith(ARCHIVE_TEXT).replace(/\n/g, '\r\n');
-      expect(findPurposePlaceholderIssue(ARCHIVE_TEXT, content)).toEqual({ line: 4 });
+      const content = parseFeature(specText(ARCHIVE_TEXT).replace(/\n/g, '\r\n'));
+      expect(findPurposePlaceholderIssue(ARCHIVE_TEXT, content)).toEqual({ line: 2 });
     });
 
-    it('reports without a line rather than guessing when the section is empty', () => {
+    it('reports without a line rather than guessing when the description is empty', () => {
       // The parsed overview and the file disagree; report the finding, not a
       // line number pointing at the wrong text.
-      const content = ['# widgets Specification', '', '## Purpose', '', '## Requirements', ''].join(
-        '\n'
-      );
+      const content = parseFeature(['Feature: Widgets', '', '  @REQ-0001', '  Rule: Retries', ''].join('\n'));
       expect(findPurposePlaceholderIssue('TBD', content)).toEqual({ line: undefined });
     });
 
@@ -313,52 +271,52 @@ describe('findPurposePlaceholderIssue', () => {
   });
 
   // Every position a placeholder can occupy in a Purpose, and the line the
-  // warning should name for it. `specWith` puts the Purpose body at line 4, so
-  // the expected line is 4 plus however many lines precede the placeholder
+  // warning should name for it. `specWith` puts the Purpose body at line 2, so
+  // the expected line is 2 plus however many lines precede the placeholder
   // inside the body.
   describe('the reported line follows the placeholder, wherever it sits', () => {
     const cases: Array<{ name: string; purpose: string; line: number }> = [
       {
         name: 'generated sentence alone — the shape archive writes',
         purpose: ARCHIVE_TEXT,
-        line: 4,
+        line: 2,
       },
       {
         name: 'generated sentence one blank line below a sentence of prose',
         purpose: `Handles widget retries.\n\n${ARCHIVE_TEXT}`,
-        line: 6,
+        line: 4,
       },
       {
         name: 'generated sentence below two lines of prose',
         purpose: `Handles widget retries.\nAcross every transport.\n\n${ARCHIVE_TEXT}`,
-        line: 7,
+        line: 5,
       },
       {
         name: 'bare TBD an agent left behind',
         purpose: 'TBD',
-        line: 4,
+        line: 2,
       },
       {
         name: 'both markers — the earliest is what a reader meets first',
         purpose: `TBD, pending a rewrite.\n\n${ARCHIVE_TEXT}`,
-        line: 4,
+        line: 2,
       },
       {
         name: 'generated sentence rewrapped across two lines by a formatter',
         purpose: 'TBD - created by archiving\nchange c1. Update Purpose after archive.',
-        line: 4,
+        line: 2,
       },
     ];
 
     for (const { name, purpose, line } of cases) {
       it(name, () => {
-        const content = specWith(purpose);
+        const content = specText(purpose);
         // Guard the fixture itself: the expected line must really carry the
         // placeholder, or the test would pin a number rather than a behaviour.
         const onThatLine = content.split('\n')[line - 1];
-        expect(onThatLine.startsWith('TBD')).toBe(true);
+        expect(onThatLine.trim().startsWith('TBD')).toBe(true);
 
-        expect(findPurposePlaceholderIssue(purpose, content)).toEqual({ line });
+        expect(findPurposePlaceholderIssue(purpose, parseFeature(content))).toEqual({ line });
       });
     }
   });

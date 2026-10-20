@@ -40,7 +40,7 @@ export function getOpsxProposeSkillTemplate(): SkillTemplate {
 
 I'll create a change with the artifacts your schema defines. With the default spec-driven schema that is:
 - proposal.md (what & why)
-- \`specs/<capability-path>/spec.md\` (what the system must do - a delta, not the main spec)
+- \`specs/<capability-path>/spec.feature\` (what the system must do - a delta, not the main spec)
 - design.md (how)
 - tasks.md (implementation steps)
 
@@ -206,7 +206,7 @@ export function getOpsxProposeCommandTemplate(): CommandTemplate {
 
 I'll create a change with the artifacts your schema defines. With the default spec-driven schema that is:
 - proposal.md (what & why)
-- \`specs/<capability-path>/spec.md\` (what the system must do - a delta, not the main spec)
+- \`specs/<capability-path>/spec.feature\` (what the system must do - a delta, not the main spec)
 - design.md (how)
 - tasks.md (implementation steps)
 

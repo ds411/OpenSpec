@@ -221,8 +221,8 @@ If the user mentions a change or you detect one is relevant:
 
     | Insight Type               | Where to Capture                    |
     |----------------------------|-------------------------------------|
-    | New requirement discovered | \`specs/<capability-path>/spec.md\` |
-    | Requirement changed        | \`specs/<capability-path>/spec.md\` |
+    | New requirement discovered | \`specs/<capability-path>/spec.feature\` |
+    | Requirement changed        | \`specs/<capability-path>/spec.feature\` |
     | Design decision made       | \`design.md\`                       |
     | Scope changed              | \`proposal.md\`                     |
     | New work identified        | \`tasks.md\`                        |
@@ -557,8 +557,8 @@ If the user mentions a change or you detect one is relevant:
 
     | Insight Type               | Where to Capture                    |
     |----------------------------|-------------------------------------|
-    | New requirement discovered | \`specs/<capability-path>/spec.md\` |
-    | Requirement changed        | \`specs/<capability-path>/spec.md\` |
+    | New requirement discovered | \`specs/<capability-path>/spec.feature\` |
+    | Requirement changed        | \`specs/<capability-path>/spec.feature\` |
     | Design decision made       | \`design.md\`                       |
     | Scope changed              | \`proposal.md\`                     |
     | New work identified        | \`tasks.md\`                        |

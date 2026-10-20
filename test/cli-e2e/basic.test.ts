@@ -572,8 +572,8 @@ describe('openspec CLI e2e basics', () => {
         options.tasksComplete === false ? '- [ ] Task 1\n' : '- [x] Task 1\n'
       );
       await fs.writeFile(
-        path.join(changeDir, 'specs', 'greeting', 'spec.md'),
-        '## ADDED Requirements\n\n### Requirement: Greeting\nThe system SHALL greet the user.\n\n#### Scenario: Greets on request\n- **WHEN** the user says hello\n- **THEN** the system greets back\n'
+        path.join(changeDir, 'specs', 'greeting', 'spec.feature'),
+        'Feature: Greeting\n\n  @added @REQ-0001\n  Rule: Greeting\n    The system SHALL greet the user.\n\n    Scenario: Greets on request\n      When the user says hello\n      Then the system greets back\n'
       );
       return base;
     }
@@ -590,7 +590,7 @@ describe('openspec CLI e2e basics', () => {
 
       // The change is untouched: nothing was archived or merged.
       expect(await fileExists(path.join(projectDir, 'openspec', 'changes', 'add-greeting', 'proposal.md'))).toBe(true);
-      expect(await fileExists(path.join(projectDir, 'openspec', 'specs', 'greeting', 'spec.md'))).toBe(false);
+      expect(await fileExists(path.join(projectDir, 'openspec', 'specs', 'greeting', 'spec.feature'))).toBe(false);
     });
 
     it('reports the incomplete-task prompt the same way', async () => {
@@ -631,7 +631,7 @@ describe('openspec CLI e2e basics', () => {
       const result = await runCLI(['archive', 'add-greeting', '--yes'], { cwd: projectDir });
 
       expect(result.exitCode).toBe(0);
-      expect(await fileExists(path.join(projectDir, 'openspec', 'specs', 'greeting', 'spec.md'))).toBe(true);
+      expect(await fileExists(path.join(projectDir, 'openspec', 'specs', 'greeting', 'spec.feature'))).toBe(true);
     });
 
     it('asks for a change name instead of exiting 0 without archiving', async () => {

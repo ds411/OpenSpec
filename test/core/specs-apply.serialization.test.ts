@@ -5,36 +5,32 @@ import path from 'node:path';
 import { buildUpdatedSpec, findSpecUpdates } from '../../src/core/specs-apply.js';
 
 const ORIGINAL_REQUIREMENT = [
-  '### Requirement: Existing behavior',
-  'The project SHALL expose the original behavior.',
+  '  @REQ-0001',
+  '  Rule: Existing behavior',
+  '    The project SHALL expose the original behavior.',
   '',
-  '#### Scenario: Existing path',
-  '- **WHEN** the behavior is exercised',
-  '- **THEN** it SHALL remain available',
+  '    Scenario: Existing path',
+  '      When the behavior is exercised',
+  '      Then it SHALL remain available',
 ].join('\n');
 
 const UPDATED_REQUIREMENT = [
-  '### Requirement: Existing behavior',
-  'The project SHALL expose the updated behavior.',
+  '  @modified @REQ-0001',
+  '  Rule: Existing behavior',
+  '    The project SHALL expose the updated behavior.',
   '',
-  'It SHALL preserve this meaningful internal paragraph break.',
+  '    It SHALL preserve this meaningful internal paragraph break.',
   '',
-  '#### Scenario: Existing path',
-  '- **WHEN** the behavior is exercised',
-  '- **THEN** it SHALL remain available',
+  '    Scenario: Existing path',
+  '      When the behavior is exercised',
+  '      Then it SHALL remain available',
 ].join('\n');
 
-const BASE_SPEC = [
-  '# demo Specification',
-  '',
-  '## Purpose',
-  'Demonstrates deterministic serializer output.',
-  '',
-  '## Requirements',
-  ORIGINAL_REQUIREMENT,
-].join('\n');
+const BASE_SPEC = ['Feature: Demo', '  Demonstrates deterministic serializer output.', '', ORIGINAL_REQUIREMENT].join(
+  '\n'
+);
 
-const DELTA_SPEC = ['## MODIFIED Requirements', '', UPDATED_REQUIREMENT, ''].join('\n');
+const DELTA_SPEC = ['Feature: Demo', '', UPDATED_REQUIREMENT, ''].join('\n');
 
 function expectOneFinalLf(content: string): void {
   expect(content.endsWith('\n')).toBe(true);
@@ -53,8 +49,8 @@ describe('spec serialization', () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-spec-eof-'));
     changeDir = path.join(tempDir, 'openspec', 'changes', 'serializer-test');
     mainSpecsDir = path.join(tempDir, 'openspec', 'specs');
-    source = path.join(changeDir, 'specs', 'demo', 'spec.md');
-    target = path.join(mainSpecsDir, 'demo', 'spec.md');
+    source = path.join(changeDir, 'specs', 'demo', 'spec.feature');
+    target = path.join(mainSpecsDir, 'demo', 'spec.feature');
     await fs.mkdir(path.dirname(source), { recursive: true });
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(source, DELTA_SPEC);
@@ -64,8 +60,9 @@ describe('spec serialization', () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  async function build(targetContent: string) {
+  async function build(targetContent: string, delta = DELTA_SPEC) {
     await fs.writeFile(target, targetContent);
+    await fs.writeFile(source, delta);
     const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
     return buildUpdatedSpec(update, 'serializer-test', { silent: true });
   }
@@ -80,53 +77,73 @@ describe('spec serialization', () => {
 
     expectOneFinalLf(result.rebuilt);
     expect(result.rebuilt).toContain(
-      'updated behavior.\n\nIt SHALL preserve this meaningful internal paragraph break.'
+      'updated behavior.\n\n    It SHALL preserve this meaningful internal paragraph break.'
     );
   });
 
-  it('preserves content after Requirements', async () => {
-    const result = await build(`${BASE_SPEC}\n\n## Notes\n\nKeep this later section.\n\n`);
+  it('drops the operation tag and keeps the ID', async () => {
+    const result = await build(BASE_SPEC);
 
-    expectOneFinalLf(result.rebuilt);
-    expect(result.rebuilt).toContain('## Notes\n\nKeep this later section.\n');
+    expect(result.rebuilt).toContain('  @REQ-0001\n  Rule: Existing behavior\n');
+    expect(result.rebuilt).not.toContain('@modified');
   });
 
-  it('keeps the blank lines around ## Requirements when the target has them', async () => {
-    const blankLinedSpec = [
-      '# demo Specification',
+  it('keeps the feature header, its comments and the untouched rules byte for byte', async () => {
+    const header = [
+      '# language: en',
+      '@capability',
+      'Feature: Demo',
+      '  Demonstrates deterministic serializer output.',
       '',
-      '## Purpose',
+      '  It has a second paragraph.',
       '',
-      'Demonstrates blank-line preservation.',
+      '  # A comment the merge must keep.',
+    ].join('\n');
+    const untouched = [
+      '  # Why this rule exists.',
+      '  @REQ-0002 @notrace',
+      '  Rule: Untouched',
+      '    The project SHALL keep this rule as written.',
       '',
-      '## Requirements',
+      '    Scenario: Kept',
+      '      When   spacing is odd',
+      '      Then it stays odd',
+    ].join('\n');
+
+    const result = await build(`${header}\n\n${ORIGINAL_REQUIREMENT}\n\n${untouched}\n`);
+
+    expect(result.rebuilt.startsWith(`${header}\n\n`)).toBe(true);
+    expect(result.rebuilt).toContain(untouched);
+    expect(result.rebuilt.indexOf('Rule: Existing behavior')).toBeLessThan(result.rebuilt.indexOf('Rule: Untouched'));
+  });
+
+  it('moves a delta rule to the indentation the main spec uses', async () => {
+    const flat = BASE_SPEC.split('\n')
+      .map((line) => line.replace(/^ {2}/, ''))
+      .join('\n');
+
+    const result = await build(flat);
+
+    expect(result.rebuilt).toContain('@REQ-0001\nRule: Existing behavior\n  The project SHALL expose the updated behavior.');
+  });
+
+  it('appends an @added rule after the existing rules, separated by one blank line', async () => {
+    const added = [
+      'Feature: Demo',
       '',
-      ORIGINAL_REQUIREMENT,
+      '  @added @REQ-0002',
+      '  Rule: New behavior',
+      '    The project SHALL expose the new behavior.',
+      '',
+      '    Scenario: New path',
+      '      When the new behavior is exercised',
+      '      Then it works',
       '',
     ].join('\n');
 
-    const result = await build(blankLinedSpec);
+    const result = await build(`${BASE_SPEC}\n`, added);
 
+    expect(result.rebuilt).toContain('      Then it SHALL remain available\n\n  @REQ-0002\n  Rule: New behavior');
     expectOneFinalLf(result.rebuilt);
-    expect(result.rebuilt).toContain(
-      'blank-line preservation.\n\n## Requirements\n\n### Requirement: Existing behavior'
-    );
-  });
-
-  it('separates a ## Requirements heading glued to its neighbors', async () => {
-    const gluedSpec = [
-      '# demo Specification',
-      '',
-      '## Purpose',
-      'Demonstrates deterministic serializer output.',
-      '## Requirements',
-      ORIGINAL_REQUIREMENT,
-    ].join('\n');
-
-    const result = await build(gluedSpec);
-
-    expect(result.rebuilt).toContain(
-      'serializer output.\n\n## Requirements\n\n### Requirement: Existing behavior'
-    );
   });
 });

@@ -268,8 +268,8 @@ relationship without moving anyone's work.
    owned by the platform team            owned by a product team
    ┌──────────────────────────┐          ┌──────────────────────────┐
    │ openspec/specs/          │ ◀────────│ openspec/config.yaml     │
-   │   payments/spec.md       │ reads    │   references:            │
-   │   auth/spec.md           │          │     - platform-reqs      │
+   │   payments/spec.feature  │ reads    │   references:            │
+   │   auth/spec.feature      │          │     - platform-reqs      │
    │                          │          │ openspec/specs/          │
    │ openspec/changes/        │          │   (their own designs)    │
    │   platform work          │          │ openspec/changes/        │

@@ -19,10 +19,12 @@
 | Command | What it does |
 |---|---|
 | [`openspec list`](#openspec-list) | List changes, or specs with `--specs`. |
-| [`openspec show`](#openspec-show) | Print a change or spec, as markdown or JSON. |
+| [`openspec show`](#openspec-show) | Print a change or spec, as raw text or JSON. |
 | [`openspec view`](#openspec-view) | One-screen dashboard of specs and changes. |
 | [`openspec validate`](#openspec-validate) | Check changes and specs for structural issues. |
 | [`openspec archive`](#openspec-archive) | Move a completed change to the archive and update the main specs. |
+| [`openspec ids`](#openspec-ids) | Give requirements their IDs, or take free IDs from the counter. |
+| [`openspec convert-specs`](#openspec-convert-specs) | Convert markdown specs (`spec.md`) to Gherkin feature files. |
 
 **Workflows and schemas**
 
@@ -471,6 +473,8 @@ Specs:
   api     requirements 1
 ```
 
+A capability whose main spec is still a markdown `spec.md` is not listed as a spec. A warning under the list names it and points to [`openspec convert-specs`](#openspec-convert-specs); with `--json` it is a `warnings` entry with code `legacy_markdown_spec`.
+
 `--json` adds task counts and a `status` of `no-tasks`, `in-progress`, or `complete`:
 
 ```json
@@ -509,12 +513,12 @@ rmdir openspec/changes/mobile
 
 ## openspec show
 
-Prints a change or spec, as markdown or JSON.
+Prints a change or spec, as raw text or JSON.
 
 ```bash
 openspec show add-rate-limit              # change: prints proposal.md
 openspec show add-rate-limit --diff       # change: append requirement diffs
-openspec show api                         # spec: prints spec.md
+openspec show api                         # spec: prints spec.feature
 openspec show api --json --no-scenarios   # spec JSON without scenario text
 ```
 
@@ -530,7 +534,7 @@ With no name, show asks change or spec, then lists items to pick from. Outside a
 
 | Flag | Effect |
 |---|---|
-| `--json` | Print structured JSON instead of raw markdown. |
+| `--json` | Print structured JSON instead of the raw file. |
 | `--type <change\|spec>` | Pick the type when a change and a spec share a name. |
 | `--no-interactive` | Never prompt: a missing name becomes an error. |
 | `--deltas-only` | JSON, change: restrict output to deltas. Change JSON is already delta-only, so output matches plain `--json`. |
@@ -538,14 +542,14 @@ With no name, show asks change or spec, then lists items to pick from. Outside a
 | `--diff` | Change: append per-requirement delta diffs. Ignored with a warning for specs. |
 | `--requirements` | JSON, spec: keep requirement text, empty the `scenarios` arrays. |
 | `--no-scenarios` | JSON, spec: same output as `--requirements`. |
-| `-r, --requirement <id>` | JSON, spec: output one requirement by 1-based position. Can't combine with `--requirements`. |
+| `-r, --requirement <id>` | JSON, spec: output one requirement by its ID (`REQ-0001`) or 1-based position. Can't combine with `--requirements`. |
 | `--store <id>` | Use a registered store as the OpenSpec root instead of the current project. |
 
 Flags that don't apply to the resolved type are ignored with a warning on stderr.
 
 **Output**
 
-Text mode is a raw passthrough: a change prints its `proposal.md`, a spec prints its `spec.md`.
+Text mode is a raw passthrough: a change prints its `proposal.md`, a spec prints its `spec.feature`.
 
 ```
 # Add rate limiting
@@ -557,9 +561,21 @@ Unauthenticated clients can exhaust the API.
 - Add per-client rate limiting to the public API.
 ```
 
-For a change, `--diff` prints the proposal first, then a `Specifications Changed (diffs)` section. ADDED requirements include their full text. REMOVED requirements retain the authored Reason and Migration. RENAMED requirements show FROM and TO. MODIFIED requirements show a unified diff against the matching main requirement.
+For a change, `--diff` prints the proposal first, then a `Specifications Changed (diffs)` section. `@added` and `@removed` rules are printed in full, under `ADDED:` and `REMOVED:` with the requirement's ID and name. A `@modified` rule shows a unified diff against the main-spec requirement with the same ID, so a rename shows as a changed `Rule:` line:
 
-If a MODIFIED header matches only after folding case or whitespace, the output includes both the diff and a warning that archive matching is exact. If the main spec or requirement is missing, the output warns and prints the full delta block. A MODIFIED block with no textual difference prints `(no textual changes)`.
+```
+auth
+
+  MODIFIED: REQ-0001 Session Expiry
+    @@ -1,8 +1,8 @@
+       @REQ-0001
+    -  Rule: Session Expiration
+    -    The system MUST expire sessions after 15 minutes of inactivity.
+    +  Rule: Session Expiry
+    +    The system MUST expire sessions after 10 minutes of inactivity.
+```
+
+If the rule has no ID, or the main spec or requirement is missing, the output warns and prints the full delta rule. A `@modified` rule with no textual difference prints `(no textual changes)`.
 
 A change with `--json` is delta-shaped:
 
@@ -572,14 +588,15 @@ A change with `--json` is delta-shaped:
     {
       "spec": "api",
       "operation": "ADDED",
-      "description": "Add requirement: The API SHALL limit each client to 100 requests per minute.",
+      "description": "Add requirement REQ-0007: The API SHALL limit each client to 100 requests per minute.",
       "requirement": {
+        "id": "REQ-0007",
         "name": "Rate limit",
         "text": "The API SHALL limit each client to 100 requests per minute.",
         "scenarios": [
           {
             "name": "Client exceeds the limit",
-            "rawText": "- **WHEN** a client sends its 101st request within a minute\n- **THEN** the API responds 429"
+            "rawText": "When a client sends its 101st request within a minute\nThen the API responds 429"
           }
         ]
       },
@@ -593,9 +610,9 @@ A change with `--json` is delta-shaped:
 }
 ```
 
-Each requirement carries its `name`, the header text after `Requirement:`. This is the name archive matches MODIFIED, REMOVED and RENAMED entries against. Each scenario carries its `name`, the header text after `Scenario:`. A closing `#` run on either header is not part of the name.
+Each requirement carries its `id`, the `@REQ-…` tag on its rule, and its `name`, the text after `Rule:`. Archive matches `@modified` and `@removed` rules to the main spec by `id`, not by name. Each scenario carries its `name`, the text after `Scenario:`, and its steps as `rawText`. The `operation` values stay `ADDED`, `MODIFIED` and `REMOVED`, one for each operation tag.
 
-`--json --diff` keeps this top-level shape. A MODIFIED delta gains a `diff` string, a `warning` string, or both. Other operations are unchanged. An empty `diff` string means the main and delta blocks are textually identical.
+`--json --diff` keeps this top-level shape. A MODIFIED delta gains a `diff` string, a `warning` string, or both. Other operations are unchanged. An empty `diff` string means the main and delta rules are textually identical.
 
 A spec with `--json` lists its requirements with scenarios. Requirements and scenarios carry the same `name` fields as change JSON:
 
@@ -607,12 +624,13 @@ A spec with `--json` lists its requirements with scenarios. Requirements and sce
   "requirementCount": 1,
   "requirements": [
     {
+      "id": "REQ-0003",
       "name": "Health endpoint",
       "text": "The API SHALL expose a health endpoint.",
       "scenarios": [
         {
           "name": "Health check succeeds",
-          "rawText": "- **WHEN** a client requests GET /health\n- **THEN** the API responds 200"
+          "rawText": "When a client requests GET /health\nThen the API responds 200"
         }
       ]
     }
@@ -755,10 +773,10 @@ Fenced blocks, HTML comments, YAML front matter and indented code are not scanne
 
 **Archive merge findings**
 
-For changes, validate runs archive's merge builder against the current main specs without writing files. It reports merge conflicts, such as a missing `MODIFIED` target or a conflicting `ADDED` requirement, as `INFO`:
+For changes, validate runs archive's merge builder against the current main specs without writing files. It reports merge conflicts, such as a `@modified` rule whose ID is not in the main spec or an `@added` rule whose ID already is, as `INFO`:
 
 ```text
-ℹ [INFO] api/spec.md: Archive would refuse this delta: api MODIFIED failed for header "### Requirement: Rate limiting" - not found
+ℹ [INFO] api/spec.feature: Archive would refuse this delta: api @modified failed for REQ-0042 ("Rate limiting") - not found in the current spec
 ```
 
 These findings appear even when validation passes, in both text and JSON output. `INFO` never changes the exit code, including under `--strict`: a missing target may belong to a sibling change that has not archived yet. Deltas already synced into the main specs follow archive's existing merge rules.
@@ -771,10 +789,11 @@ A failing item lists each issue and the fix:
 
 ```
 Change 'add-rate-limit' has issues
-✗ [ERROR] api/spec.md: ADDED "Rate limiting" must include at least one scenario
+✗ [ERROR] api/spec.feature: @added "Rate limiting" must include at least one scenario
 Next steps:
-  - Ensure change has deltas in specs/: use headers ## ADDED/MODIFIED/REMOVED/RENAMED Requirements
-  - Each requirement MUST include at least one #### Scenario: block
+  - Ensure change has deltas in specs/<capability>/spec.feature: Gherkin rules tagged @added, @modified or @removed
+  - Each @added or @modified rule MUST include at least one Scenario: with steps
+  - Give rules without an ID their ID: openspec ids assign add-rate-limit
   - Debug parsed deltas: openspec show add-rate-limit --json --deltas-only
 ```
 
@@ -989,14 +1008,14 @@ Task status: ✓ Complete
 
 Specs to update:
   api: update
-Applying changes to openspec/specs/api/spec.md:
+Applying changes to openspec/specs/api/spec.feature:
   + 1 added
 Totals: + 1, ~ 0, - 0, → 0
 Specs updated successfully.
 Change 'add-rate-limit' archived as '2026-08-11-add-rate-limit'.
 ```
 
-The change folder moves whole to `openspec/changes/archive/2026-08-11-add-rate-limit/`, today's date prefixed to its name. Each delta merges into its main spec: the ADDED requirement above was appended to `openspec/specs/api/spec.md`. Without `-y`, archive shows the preview and asks before updating. Declining still archives the change and leaves the specs alone.
+The change folder moves whole to `openspec/changes/archive/2026-08-11-add-rate-limit/`, today's date prefixed to its name. Each delta merges into its main spec, matched by requirement ID: the `@added` rule above was appended to `openspec/specs/api/spec.feature`. Without `-y`, archive shows the preview and asks before updating. Declining still archives the change and leaves the specs alone.
 
 With `--json --yes`:
 
@@ -1025,7 +1044,7 @@ Archive validates the change first and refuses one that fails:
 
 ```
 Validation errors in change delta specs:
-  ✗ ADDED "Rate limiting" must include at least one scenario
+  ✗ @added "Rate limiting" must include at least one scenario
 
 Validation failed. Please fix the errors before archiving.
 To skip validation (not recommended), use --no-validate flag.
@@ -1042,6 +1061,103 @@ Warning: 1 incomplete task(s) found. Continuing due to --yes flag.
 
 - `0`: the change was archived, with or without spec updates.
 - `1`: validation failed, the change name is unknown, or a confirmation was needed and no answer could be read.
+
+## openspec ids
+
+Gives requirements their IDs. Every requirement is a Gherkin `Rule:` tagged with an ID such as `@REQ-0007`. IDs come from one counter for the project, `openspec/requirement-ids.yaml`, so they never collide across capabilities and a removed requirement's ID is never reused. The file is created the first time an ID is given. Commit it with your specs; on a merge conflict in it, keep the larger number.
+
+```bash
+openspec ids assign                       # give IDs to every new requirement
+openspec ids assign add-rate-limit        # only this change's delta specs
+openspec ids next --count 3               # take three IDs without writing them
+```
+
+### openspec ids assign
+
+Tags every rule that has no ID with the next free one, and moves the counter.
+
+**Arguments**
+
+| Argument | What it is |
+|---|---|
+| `target` | Optional. An active change name, or a feature file or folder. Without it, the main specs and every active change are scanned. Archived changes are never touched. |
+
+**Options**
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Show the IDs without writing them. The counter does not move. |
+| `--json` | Print `{ "assigned": [...], "problems": [...] }` instead of text. |
+| `--store <id>` | Use a registered store as the OpenSpec root instead of the current project. |
+
+Only main-spec rules and `@added` delta rules get a new ID. A `@modified` or `@removed` rule must carry the ID of the main-spec requirement it changes, so one without an ID is reported as a problem instead. A rule with two IDs, or a file that does not parse, is also a problem.
+
+**Output**
+
+```
+REQ-0007  openspec/changes/add-rate-limit/specs/api/spec.feature:4  Rate limiting
+Assigned 1 ID.
+```
+
+With nothing to do, it prints `Every requirement has an ID.`
+
+### openspec ids next
+
+Takes the next free IDs from the counter and prints them, one per line, without writing them to any spec. Use it when a tool or a person writes the tags itself.
+
+**Options**
+
+| Flag | Effect |
+|---|---|
+| `--count <n>` | How many IDs to take. Default: 1. |
+| `--json` | Print `{ "ids": [...] }` instead of text. |
+| `--store <id>` | Use a registered store as the OpenSpec root instead of the current project. |
+
+The IDs are reserved as soon as they print, so a second run gives new ones. An ID that is taken and never used leaves a gap, which is harmless.
+
+**Exit codes** (both subcommands)
+
+- `0`: done, including when every requirement already had an ID.
+- `1`: a problem was reported, `--count` is not a positive whole number, or no OpenSpec root was found.
+
+## openspec convert-specs
+
+Converts markdown specs (`spec.md`) to Gherkin feature files (`spec.feature`) and gives every requirement an ID. Run it once when you move a project from markdown specs.
+
+```bash
+openspec convert-specs --dry-run          # show the plan
+openspec convert-specs                    # convert and delete the markdown files
+openspec convert-specs --keep             # convert and keep the markdown files
+```
+
+**Options**
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Show what would change without writing files. |
+| `--keep` | Keep the markdown files after conversion. |
+| `--json` | Print a structured result instead of text. |
+| `--store <id>` | Use a registered store as the OpenSpec root instead of the current project. |
+
+Main specs under `openspec/specs/` are converted first, then the delta specs of active changes. Archived changes are history and stay as they are. In a main spec, the title becomes the `Feature:`, the `## Purpose` text becomes its description, and each `### Requirement:` becomes a tagged `Rule:`. Scenario bullets such as `- **WHEN** ...` become `When ...` steps.
+
+In a delta, `## ADDED Requirements` become `@added` rules with new IDs. `## MODIFIED` and `## REMOVED Requirements` become `@modified` and `@removed` rules that carry the ID of the main-spec requirement with the same name, and `## RENAMED Requirements` become `@modified` rules with the new name. When no main-spec requirement has the name, the rule is written without an ID and a warning names it; add the ID by hand.
+
+Every converted file is parsed again before it is written. A file that does not convert cleanly, or that already has a `spec.feature` next to it, is reported and left alone.
+
+**Output**
+
+```
+Converted openspec/specs/api/spec.md → spec.feature (3 requirements)
+Converted openspec/changes/add-rate-limit/specs/api/spec.md → spec.feature (1 requirement)
+Converted 2 files and gave 4 IDs.
+Next: run "openspec validate --all" and review the converted files.
+```
+
+**Exit codes**
+
+- `0`: done, including when there was nothing to convert.
+- `1`: a file could not be converted, or no OpenSpec root was found.
 
 ## openspec new
 
@@ -1311,7 +1427,7 @@ Schema: spec-driven
 
 ### Context Files
 - proposal: /Users/you/projects/my-app/openspec/changes/add-rate-limit/proposal.md
-- specs: /Users/you/projects/my-app/openspec/changes/add-rate-limit/specs/api/spec.md
+- specs: /Users/you/projects/my-app/openspec/changes/add-rate-limit/specs/api/spec.feature
 - tasks: /Users/you/projects/my-app/openspec/changes/add-rate-limit/tasks.md
 
 ### Progress
@@ -1378,7 +1494,7 @@ Source: package
 proposal:
   /usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/proposal.md
 specs:
-  /usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/spec.md
+  /usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/spec.feature
 design:
   /usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/design.md
 tasks:
@@ -1394,7 +1510,7 @@ tasks:
     "source": "package"
   },
   "specs": {
-    "path": "/usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/spec.md",
+    "path": "/usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/spec.feature",
     "source": "package"
   },
   "design": {
@@ -1599,7 +1715,7 @@ openspec/schemas/my-flow/
 └── templates/
     ├── design.md
     ├── proposal.md
-    ├── spec.md
+    ├── spec.feature
     └── tasks.md
 ```
 

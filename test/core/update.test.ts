@@ -2573,8 +2573,8 @@ Old version content
         'utf-8'
       );
 
-      // Should contain generatedBy field
-      expect(updatedContent).toMatch(/generatedBy:\s*["']\d+\.\d+\.\d+["']/);
+      // Should contain generatedBy field (a fork version carries build metadata, as in 1.14.3+fork.1)
+      expect(updatedContent).toMatch(/generatedBy:\s*["']\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*["']/);
     });
   });
 

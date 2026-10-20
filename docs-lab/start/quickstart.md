@@ -77,7 +77,7 @@ Fix the plan while it's still words and nothing is built yet. Read in this order
 
 To fix something, either works:
 
-- Edit the file yourself. The artifacts are plain markdown, and the files are the plan.
+- Edit the file yourself. The artifacts are plain text (markdown, and Gherkin for specs), and the files are the plan.
 - Tell your agent what's wrong ("the spec is missing the unauthenticated case"). It revises the artifacts.
 
 ## Step 4: Apply
@@ -117,40 +117,40 @@ Step through what archiving does:
           ├── tasks.md                         every box checked
           └── specs/
               └── rate-limiting/
-                  └── spec.md                  the delta: ADDED requirements
+                  └── spec.feature             the delta: @added requirements
 
 ## Requirements land in specs/
-> Each requirement in the delta lands in the main spec: added ones append, modified ones replace their old version. A new capability gets a new spec file.
+> Each requirement in the delta lands in the main spec, matched by its ID: added ones append, modified ones replace their old version. A new capability gets a new spec file.
   openspec/
   ├── specs/
 + │   └── rate-limiting/
-+ │       └── spec.md                          gains "Requirement: Rate limiting"
++ │       └── spec.feature                     gains "Rule: Rate limiting"
   └── changes/
       └── add-rate-limiting/
           └── specs/
               └── rate-limiting/
-                  └── spec.md                  the delta, source of the merge
+                  └── spec.feature             the delta, source of the merge
 
 ## The folder moves to archive/
 > The whole change folder, delta included, moves into the archive under a date prefix. Nothing is deleted.
   openspec/
   ├── specs/
   │   └── rate-limiting/
-  │       └── spec.md
+  │       └── spec.feature
   └── changes/
 -     └── add-rate-limiting/
 +     └── archive/
 +         └── 2026-08-08-add-rate-limiting/
 +             ├── proposal.md
 +             ├── tasks.md
-+             └── specs/rate-limiting/spec.md
++             └── specs/rate-limiting/spec.feature
 
 ## Specs describe the system as built
 > changes/ is clear for the next change. specs/ is the source of truth for what the system does; archive/ is the history of how it got there.
   openspec/
   ├── specs/
   │   └── rate-limiting/
-  │       └── spec.md                          the spec as built
+  │       └── spec.feature                     the spec as built
   └── changes/
       └── archive/
           └── 2026-08-08-add-rate-limiting/
@@ -173,7 +173,7 @@ OpenSpec does not prune archived changes automatically or provide a retention se
 
 ## Going further
 
-- [Delta specs](../reference/schemas/spec-driven/index.md#delta-specs-specmd): how to write the behavior changes in a delta spec.
+- [Delta specs](../reference/schemas/spec-driven/index.md#delta-specs-specfeature): how to write the behavior changes in a delta spec.
 - [Profiles](../customize/profiles.md): optional workflows beyond the core set (verify before archive, incremental planning).
 
 ## Advanced guides

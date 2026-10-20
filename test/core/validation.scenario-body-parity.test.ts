@@ -2,98 +2,49 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import { countScenarios } from '../../src/core/parsers/requirement-text.js';
-import { MarkdownParser } from '../../src/core/parsers/markdown-parser.js';
 import { Validator } from '../../src/core/validation/validator.js';
 import { runCLI } from '../helpers/run-cli.js';
+import { featureRule, featureSpec, type FixtureScenario } from '../helpers/openspec-fixtures.js';
 
 /**
- * A scenario header with nothing under it used to pass `validate` and then fail
- * `archive`. The delta counter (countScenarios) counted every `####` header,
- * while the spec path (MarkdownParser.parseScenarios) keeps a scenario only
- * when its body has content. Archive validates the rebuilt spec on the spec
- * path, so it refused a change `validate` had just called valid.
+ * A scenario with nothing under it used to pass `validate` and then fail
+ * `archive`, because the delta path and the spec path counted scenarios
+ * differently. Archive validates the rebuilt spec on the spec path, so it
+ * refused a change `validate` had just called valid.
  *
- * The point of these tests is parity: for every scenario shape, both counters
- * return the same number, and `validate` accepts exactly what `archive` applies.
+ * The point of these tests is parity: for every scenario shape, a delta rule
+ * and the same rule in a main spec get the same verdict, and `validate`
+ * accepts exactly what `archive` applies.
  */
 
-const REQUIREMENT_TEXT = 'The system SHALL issue a credit note when an invoice is voided.';
+const STATEMENT = 'The system SHALL issue a credit note when an invoice is voided.';
 
-const CASES: Array<{ name: string; scenarios: string[]; expected: number }> = [
+const WITH_STEPS: FixtureScenario = {
+  name: 'Invoice voided',
+  steps: ['When an invoice is voided', 'Then a credit note is issued'],
+};
+const NO_STEPS: FixtureScenario = { name: 'Invoice voided', steps: [] };
+
+const CASES: Array<{ name: string; scenarios: FixtureScenario[]; valid: boolean }> = [
+  { name: 'a scenario with steps', scenarios: [WITH_STEPS], valid: true },
+  { name: 'a scenario with no steps', scenarios: [NO_STEPS], valid: false },
   {
-    name: 'a scenario with steps',
-    scenarios: ['#### Scenario: Invoice voided', '- **WHEN** an invoice is voided', '- **THEN** a credit note is issued'],
-    expected: 1,
-  },
-  { name: 'a scenario header with no body', scenarios: ['#### Scenario: Invoice voided'], expected: 0 },
-  {
-    name: 'a scenario whose body is only blank and whitespace lines',
-    scenarios: ['#### Scenario: Invoice voided', '', '   ', '\t'],
-    expected: 0,
-  },
-  {
-    name: 'two scenarios, one of them empty',
-    scenarios: [
-      '#### Scenario: Not written yet',
-      '',
-      '#### Scenario: Invoice voided',
-      '- **WHEN** an invoice is voided',
-      '- **THEN** a credit note is issued',
-    ],
-    expected: 1,
+    name: 'two scenarios, one of them with no steps',
+    scenarios: [{ name: 'Not written yet', steps: [] }, WITH_STEPS],
+    valid: false,
   },
   {
-    name: 'a scenario whose body is only a fenced block',
-    scenarios: ['#### Scenario: Invoice voided', '```text', 'WHEN voided THEN a credit note is issued', '```'],
-    expected: 1,
-  },
-  { name: 'a closed scenario header with no body', scenarios: ['#### Scenario: Invoice voided ####'], expected: 0 },
-  {
-    name: 'a closed scenario header with steps',
-    scenarios: ['#### Scenario: Invoice voided ####', '- **WHEN** an invoice is voided', '- **THEN** a credit note is issued'],
-    expected: 1,
-  },
-  {
-    name: 'a scenario whose body is only a deeper header',
-    scenarios: ['#### Scenario: Invoice voided', '##### Notes'],
-    expected: 1,
-  },
-  {
-    name: 'a scenario header inside a fenced example',
-    scenarios: ['```markdown', '#### Scenario: Example', '- **WHEN** x', '```'],
-    expected: 0,
+    name: 'a scenario whose only step carries a doc string',
+    scenarios: [{ name: 'Invoice voided', steps: ['Then a credit note reads:', '  """', '  Credit for invoice 42', '  """'] }],
+    valid: true,
   },
 ];
 
-/** The requirement block's lines after its `### Requirement:` header. */
-const deltaBodyLines = (scenarios: string[]) => [REQUIREMENT_TEXT, '', ...scenarios];
+const rule = (scenarios: FixtureScenario[], tags: string[] = []) =>
+  featureRule({ id: 'REQ-0001', tags, name: 'Credit Notes', statement: STATEMENT, scenarios });
 
-/** How many scenarios the spec path keeps for the same requirement. */
-function specPathScenarioCount(scenarios: string[]): number {
-  const spec = [
-    '# billing Specification',
-    '',
-    '## Purpose',
-    'Define how billing documents are issued for these tests.',
-    '',
-    '## Requirements',
-    '',
-    '### Requirement: Credit Notes',
-    ...deltaBodyLines(scenarios),
-    '',
-  ].join('\n');
-  return new MarkdownParser(spec).parseSpec('billing').requirements[0].scenarios.length;
-}
-
-describe('scenario counting: delta path and spec path agree', () => {
-  for (const { name, scenarios, expected } of CASES) {
-    it(`counts ${name} the same on both paths`, () => {
-      expect(specPathScenarioCount(scenarios)).toBe(expected);
-      expect(countScenarios(deltaBodyLines(scenarios))).toBe(expected);
-    });
-  }
-});
+const deltaSpec = (operation: 'added' | 'modified', scenarios: FixtureScenario[]) =>
+  `Feature: Billing\n\n${rule(scenarios, [operation])}\n`;
 
 const temps: string[] = [];
 afterAll(async () => {
@@ -106,53 +57,50 @@ async function tempDir(prefix: string): Promise<string> {
   return dir;
 }
 
-const deltaSpec = (section: 'ADDED' | 'MODIFIED', scenarios: string[]) =>
-  [`## ${section} Requirements`, '### Requirement: Credit Notes', ...deltaBodyLines(scenarios), ''].join('\n');
+async function validateDelta(delta: string) {
+  const changeDir = await tempDir('openspec-scenario-body-');
+  await fs.mkdir(path.join(changeDir, 'specs', 'billing'), { recursive: true });
+  await fs.writeFile(path.join(changeDir, 'specs', 'billing', 'spec.feature'), delta);
+  return new Validator().validateChangeDeltaSpecs(changeDir);
+}
 
-describe('validate rejects a requirement whose only scenario is empty', () => {
-  async function validateDelta(delta: string) {
-    const changeDir = await tempDir('openspec-scenario-body-');
-    await fs.mkdir(path.join(changeDir, 'specs', 'billing'), { recursive: true });
-    await fs.writeFile(path.join(changeDir, 'specs', 'billing', 'spec.md'), delta);
-    return new Validator().validateChangeDeltaSpecs(changeDir);
+describe('scenario checks: delta path and spec path agree', () => {
+  for (const { name, scenarios, valid } of CASES) {
+    it(`gives ${name} the same verdict on both paths`, async () => {
+      const spec = featureSpec('Billing', 'Define how billing documents are issued for these tests.', [
+        { id: 'REQ-0001', name: 'Credit Notes', statement: STATEMENT, scenarios },
+      ]);
+      const specReport = await new Validator().validateSpecContent('billing', spec);
+      const deltaReport = await validateDelta(deltaSpec('added', scenarios));
+
+      expect(specReport.valid).toBe(valid);
+      expect(deltaReport.valid).toBe(valid);
+    });
   }
+});
 
+describe('validate rejects a scenario with no steps', () => {
   const scenarioErrors = (report: { issues: Array<{ level: string; message: string }> }) =>
     report.issues.filter((issue) => issue.level === 'ERROR' && issue.message.includes('scenario'));
 
-  it('control: accepts a scenario with steps', async () => {
-    const report = await validateDelta(deltaSpec('ADDED', CASES[0].scenarios));
-    expect(report.valid).toBe(true);
-  });
-
-  for (const section of ['ADDED', 'MODIFIED'] as const) {
-    it(`rejects a ${section} requirement whose only scenario has no body, naming it`, async () => {
-      const report = await validateDelta(deltaSpec(section, ['#### Scenario: Invoice voided']));
+  for (const operation of ['added', 'modified'] as const) {
+    it(`rejects a @${operation} rule whose only scenario has no steps, naming it`, async () => {
+      const report = await validateDelta(deltaSpec(operation, [NO_STEPS]));
       expect(report.valid).toBe(false);
       const errors = scenarioErrors(report);
       expect(errors).toHaveLength(1);
-      expect(errors[0].message).toContain(`${section} "Credit Notes"`);
-      // Say why a header the author can see does not count.
-      expect(errors[0].message).toMatch(/no body|nothing under/i);
+      expect(errors[0].message).toContain(`@${operation} "Credit Notes"`);
+      // Say why a scenario the author can see does not count.
+      expect(errors[0].message).toContain('scenario "Invoice voided" has no steps');
     });
   }
-
-  it('rejects a scenario whose body is only whitespace', async () => {
-    const report = await validateDelta(deltaSpec('ADDED', ['#### Scenario: Invoice voided', '   ', '\t']));
-    expect(report.valid).toBe(false);
-  });
-
-  it('accepts two scenarios when only one is empty, as archive does', async () => {
-    const report = await validateDelta(deltaSpec('ADDED', CASES[3].scenarios));
-    expect(scenarioErrors(report)).toEqual([]);
-  });
 });
 
 /**
  * A real project, created with `openspec init` and `openspec new change`, whose
  * change `edit` adds a Credit Notes requirement with the given scenarios.
  */
-async function projectWithScenarios(scenarios: string[]) {
+async function projectWithScenarios(scenarios: FixtureScenario[]) {
   const base = await tempDir('openspec-scenario-body-e2e-');
   const home = path.join(base, 'home');
   const project = path.join(base, 'project');
@@ -176,7 +124,7 @@ async function projectWithScenarios(scenarios: string[]) {
     '# Credit notes\n\n## Why\nVoided invoices need a matching credit note so the ledger always balances.\n\n## What Changes\n- **billing**: adds credit notes\n'
   );
   await fs.writeFile(path.join(dir, 'tasks.md'), '## 1. Work\n- [x] 1.1 Done\n');
-  await fs.writeFile(path.join(dir, 'specs', 'billing', 'spec.md'), deltaSpec('ADDED', scenarios));
+  await fs.writeFile(path.join(dir, 'specs', 'billing', 'spec.feature'), deltaSpec('added', scenarios));
 
   return {
     verdicts: async () => {
@@ -189,17 +137,17 @@ async function projectWithScenarios(scenarios: string[]) {
 
 describe('validate and archive give the same verdict (e2e)', () => {
   it('control: a scenario with steps is valid and archives', async () => {
-    const project = await projectWithScenarios(CASES[0].scenarios);
+    const project = await projectWithScenarios([WITH_STEPS]);
     expect(await project.verdicts()).toEqual({ valid: true, archived: true });
   }, 120_000);
 
-  it('a scenario header with no body is rejected by both', async () => {
-    const project = await projectWithScenarios(['#### Scenario: Invoice voided']);
+  it('a scenario with no steps is rejected by both', async () => {
+    const project = await projectWithScenarios([NO_STEPS]);
     expect(await project.verdicts()).toEqual({ valid: false, archived: false });
   }, 120_000);
 
-  it('two scenarios where one is empty are accepted by both', async () => {
-    const project = await projectWithScenarios(CASES[3].scenarios);
-    expect(await project.verdicts()).toEqual({ valid: true, archived: true });
+  it('two scenarios where one has no steps are rejected by both', async () => {
+    const project = await projectWithScenarios(CASES[2].scenarios);
+    expect(await project.verdicts()).toEqual({ valid: false, archived: false });
   }, 120_000);
 });

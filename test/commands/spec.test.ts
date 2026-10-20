@@ -14,40 +14,41 @@ describe('spec command', () => {
     await fs.mkdir(specsDir, { recursive: true });
     
     // Create test spec files
-    const testSpec = `## Purpose
-This is a test specification for the authentication system.
+    const testSpec = `Feature: auth
+  This is a test specification for the authentication system.
 
-## Requirements
+  @REQ-0001
+  Rule: User Authentication
+    The system SHALL provide secure user authentication
 
-### Requirement: User Authentication
-The system SHALL provide secure user authentication
+    Scenario: Successful login
+      Given a user with valid credentials
+      When they submit the login form
+      Then they are authenticated
 
-#### Scenario: Successful login
-- **GIVEN** a user with valid credentials
-- **WHEN** they submit the login form  
-- **THEN** they are authenticated
+  @REQ-0002
+  Rule: Password Reset
+    The system SHALL allow users to reset their password
 
-### Requirement: Password Reset
-The system SHALL allow users to reset their password
-
-#### Scenario: Reset via email
-- **GIVEN** a user with a registered email
-- **WHEN** they request a password reset
-- **THEN** they receive a reset link`;
+    Scenario: Reset via email
+      Given a user with a registered email
+      When they request a password reset
+      Then they receive a reset link
+`;
 
     await fs.mkdir(path.join(specsDir, 'auth'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'auth', 'spec.md'), testSpec);
-    
-    const testSpec2 = `## Purpose
-This specification defines the payment processing system.
+    await fs.writeFile(path.join(specsDir, 'auth', 'spec.feature'), testSpec);
 
-## Requirements
+    const testSpec2 = `Feature: payment
+  This specification defines the payment processing system.
 
-### Requirement: Process Payments
-The system SHALL process credit card payments securely`;
+  @REQ-0003
+  Rule: Process Payments
+    The system SHALL process credit card payments securely
+`;
 
     await fs.mkdir(path.join(specsDir, 'payment'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'payment', 'spec.md'), testSpec2);
+    await fs.writeFile(path.join(specsDir, 'payment', 'spec.feature'), testSpec2);
   });
 
   afterEach(async () => {
@@ -63,8 +64,8 @@ The system SHALL process credit card payments securely`;
           encoding: 'utf-8'
         });
         
-        // Raw passthrough should match spec.md content
-        const raw = await fs.readFile(path.join(specsDir, 'auth', 'spec.md'), 'utf-8');
+        // Raw passthrough should match spec.feature content
+        const raw = await fs.readFile(path.join(specsDir, 'auth', 'spec.feature'), 'utf-8');
         expect(output.trim()).toBe(raw.trim());
       } finally {
         process.chdir(originalCwd);
@@ -104,6 +105,13 @@ The system SHALL process credit card payments securely`;
           encoding: 'utf-8'
         }));
         expect(one.requirements[0].name).toBe('Password Reset');
+
+        const byId = JSON.parse(execFileSync('node', [openspecBin, 'show', 'auth', '--type', 'spec', '--json', '-r', 'REQ-0002'], {
+          encoding: 'utf-8'
+        }));
+        expect(byId.requirements).toHaveLength(1);
+        expect(byId.requirements[0].id).toBe('REQ-0002');
+        expect(byId.requirements[0].name).toBe('Password Reset');
 
         const bare = JSON.parse(execFileSync('node', [openspecBin, 'show', 'auth', '--type', 'spec', '--json', '--no-scenarios'], {
           encoding: 'utf-8'
@@ -268,13 +276,11 @@ The system SHALL process credit card payments securely`;
     });
 
     it('should detect invalid spec structure', async () => {
-      const invalidSpec = `## Purpose
-
-## Requirements
-This section has no actual requirements`;
+      const invalidSpec = `Feature: invalid
+`;
 
       await fs.mkdir(path.join(specsDir, 'invalid'), { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'invalid', 'spec.md'), invalidSpec);
+      await fs.writeFile(path.join(specsDir, 'invalid', 'spec.feature'), invalidSpec);
 
       const originalCwd = process.cwd();
       try {

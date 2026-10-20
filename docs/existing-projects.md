@@ -26,7 +26,7 @@ Your specs now describe exactly the part of the system that change touched, and 
 
 ## Why delta-first is the whole trick
 
-OpenSpec changes are written as **deltas**: `ADDED`, `MODIFIED`, `REMOVED`. A delta describes what's changing relative to current behavior, not the entire system.
+OpenSpec changes are written as **deltas**: rules tagged `@added`, `@modified`, or `@removed`. A delta describes what's changing relative to current behavior, not the entire system.
 
 This is exactly what brownfield work needs. You're rarely building from nothing. You're adding a field, fixing a redirect, tightening a timeout. A delta lets you specify that one change precisely without first writing a 40-page spec of everything around it.
 

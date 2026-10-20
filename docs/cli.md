@@ -13,6 +13,7 @@ The OpenSpec CLI (`openspec`) provides terminal commands for project setup, vali
 | **Personal worksets** | `workset create`, `workset list`, `workset open`, `workset remove` | Keep and open personal, local working views in your tool |
 | **Browsing** | `list`, `view`, `show` | Explore changes and specs |
 | **Validation** | `validate` | Check changes and specs for issues |
+| **Requirement IDs** | `ids assign`, `ids next`, `convert-specs` | Give requirements their IDs and convert markdown specs to Gherkin |
 | **Lifecycle** | `archive` | Finalize completed changes |
 | **Workflow** | `new change`, `status`, `instructions`, `templates`, `schemas` | Artifact-driven workflow support |
 | **Schemas** | `schema init`, `schema fork`, `schema validate`, `schema which` | Create and manage custom workflows |
@@ -47,6 +48,9 @@ These commands support `--json` output for programmatic use by AI agents and scr
 | `openspec list` | Browse changes/specs | `--json` for structured data |
 | `openspec show <item>` | Read content | `--json` for parsing |
 | `openspec validate` | Check for issues | `--all --json` for bulk validation |
+| `openspec ids assign [target]` | Give IDs to new requirements | `--json` for the assigned IDs |
+| `openspec ids next` | Take free requirement IDs | `--count <n> --json` |
+| `openspec convert-specs` | Convert markdown specs to Gherkin | `--dry-run --json` to see the plan |
 | `openspec status` | See artifact progress | `--json` for structured status |
 | `openspec instructions` | Get next steps | `--json` for agent instructions |
 | `openspec templates` | Find template paths | `--json` for path resolution |
@@ -537,7 +541,7 @@ openspec show add-dark-mode --json
 
 ### `openspec validate`
 
-Validate changes and specs for structural issues, and check a change's MODIFIED requirements against the main specs they would replace.
+Validate changes and specs for structural issues, and check a change's `@modified` requirements against the main specs they would replace.
 
 ```
 openspec validate [item-name] [options]
@@ -594,7 +598,7 @@ openspec validate --archived
 ```
 Validating add-dark-mode...
   ✓ proposal.md valid
-  ✓ specs/ui/spec.md valid
+  ✓ specs/ui/spec.feature valid
   ⚠ design.md: missing "Technical Approach" section
 
 1 warning found
@@ -620,6 +624,103 @@ Validating add-dark-mode...
     "invalid": 0
   }
 }
+```
+
+---
+
+## Requirement ID Commands
+
+Every requirement is a Gherkin `Rule:` with an ID tag such as `@REQ-0001`. IDs come from one counter for the project, `openspec/requirement-ids.yaml`, so they never collide and are never reused. The counter file is created the first time an ID is given; commit it with your specs. On a merge conflict in it, keep the larger number.
+
+### `openspec ids assign`
+
+Give a new ID to every rule that has none, and move the counter.
+
+```
+openspec ids assign [target] [options]
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `target` | No | An active change name, or a feature file or folder. Without it, the main specs and every active change are scanned (archived changes are not) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Show the IDs without writing them |
+| `--json` | Output as JSON (`assigned` and `problems` arrays) |
+| `--store <id>` | Use a registered store as the OpenSpec root |
+
+Only main-spec rules and `@added` delta rules get a new ID. A `@modified` or `@removed` rule with no ID is reported as a problem, because it must copy the ID of the main-spec requirement it changes. A rule with more than one ID, or a file with a syntax error, is also reported. Problems set exit code 1.
+
+**Examples:**
+
+```bash
+# Give IDs to every new requirement
+openspec ids assign
+
+# Only one change, and show the IDs first
+openspec ids assign add-2fa --dry-run
+```
+
+**Output:**
+
+```
+REQ-0006  openspec/changes/add-2fa/specs/auth/spec.feature:21  Recovery codes
+Assigned 1 ID.
+```
+
+### `openspec ids next`
+
+Take the next free IDs from the counter without writing them to any spec. Use it when a tool or a person writes the tags itself.
+
+```
+openspec ids next [--count <n>] [--json]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--count <n>` | How many IDs to take (default: 1) |
+| `--json` | Output as JSON (`{ "ids": [...] }`) |
+| `--store <id>` | Use a registered store as the OpenSpec root |
+
+The IDs are reserved when the command runs: running it again gives different IDs. An ID that is taken and never used is simply skipped.
+
+### `openspec convert-specs`
+
+Convert markdown specs (`spec.md`) to Gherkin feature files (`spec.feature`) and give every requirement an ID.
+
+```
+openspec convert-specs [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Show what would change without writing files |
+| `--keep` | Keep the markdown files after conversion |
+| `--json` | Output as JSON |
+| `--store <id>` | Use a registered store as the OpenSpec root |
+
+The command converts the main specs under `openspec/specs/` and the delta specs of active changes. Archived changes stay as they are. In a converted delta:
+
+- `## ADDED Requirements` become `@added` rules with new IDs.
+- `## MODIFIED Requirements` and `## REMOVED Requirements` become `@modified` and `@removed` rules that carry the ID of the main-spec requirement with the same name.
+- `## RENAMED Requirements` become `@modified` rules with the new name.
+
+When a modified, renamed or removed requirement has no namesake in the main spec, the rule is written without an ID and a warning names it. Add the ID by hand before you archive the change.
+
+A file is skipped, with a problem reported, when a `spec.feature` already exists next to it. Run `openspec validate --all` afterwards and review the converted files.
+
+**Output:**
+
+```
+Converted openspec/specs/auth/spec.md → spec.feature (1 requirement)
+Converted openspec/changes/add-2fa/specs/auth/spec.md → spec.feature (2 requirements)
+Converted 2 files and gave 2 IDs.
+Next: run "openspec validate --all" and review the converted files.
 ```
 
 ---
@@ -696,7 +797,7 @@ a key inside `initiative:` is rejected whatever it is called. Any other
 unrecognized top-level key is still reported as having no effect.
 
 When the change removes the capability's last requirement, OpenSpec deletes its
-live `spec.md`. Other capability deltas in the same change still update their
+live `spec.feature`. Other capability deltas in the same change still update their
 main specs. Without the marker, archive stops before changing any files and
 tells you to add it.
 
