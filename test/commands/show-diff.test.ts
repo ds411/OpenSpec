@@ -12,46 +12,64 @@ describe('openspec show --diff', () => {
   let changesDir: string;
   let specsDir: string;
 
+  /** A rule block at the indentation a spec holds it. */
+  const rule = (tags: string, name: string, statement: string, scenario: string, steps: string[]) =>
+    [
+      `  ${tags}`,
+      `  Rule: ${name}`,
+      `    ${statement}`,
+      '',
+      `    Scenario: ${scenario}`,
+      ...steps.map((step) => `      ${step}`),
+    ].join('\n');
+
+  const feature = (name: string, ...rules: string[]) => `Feature: ${name}\n\n${rules.join('\n\n')}\n`;
+
+  async function writeChange(name: string, why: string, capability: string, delta: string): Promise<string> {
+    const changeDir = path.join(changesDir, name);
+    await fs.mkdir(path.join(changeDir, 'specs', ...capability.split('/')), { recursive: true });
+    await fs.writeFile(
+      path.join(changeDir, 'proposal.md'),
+      `## Why\n${why}\n\n## What Changes\n- **${capability}:** ${why}\n`,
+      'utf-8'
+    );
+    await fs.writeFile(path.join(changeDir, 'specs', ...capability.split('/'), 'spec.feature'), delta, 'utf-8');
+    return changeDir;
+  }
+
   beforeEach(async () => {
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-show-diff-'));
     changesDir = path.join(testDir, 'openspec', 'changes');
     specsDir = path.join(testDir, 'openspec', 'specs');
     await fs.mkdir(changesDir, { recursive: true });
     await fs.mkdir(specsDir, { recursive: true });
-    await fs.writeFile(
-      path.join(testDir, 'openspec', 'project.md'),
-      '# Test project\n',
-      'utf-8'
-    );
+    await fs.writeFile(path.join(testDir, 'openspec', 'project.md'), '# Test project\n', 'utf-8');
 
-    // Base spec: auth capability with one requirement
+    // Base spec: auth capability with two requirements
     const baseSpec = [
-      '# auth Specification',
+      'Feature: Auth',
+      '  Authentication spec.',
       '',
-      '## Purpose',
-      'Authentication spec.',
+      rule(
+        '@REQ-0001',
+        'User login',
+        'The system SHALL allow users to log in with email and password.',
+        'Valid credentials',
+        ['When user provides valid email and password', 'Then system authenticates the user']
+      ),
       '',
-      '## Requirements',
-      '### Requirement: User login',
-      '',
-      'The system SHALL allow users to log in with email and password.',
-      '',
-      '#### Scenario: Valid credentials',
-      '- **WHEN** user provides valid email and password',
-      '- **THEN** system authenticates the user',
-      '',
-      '### Requirement: Session management',
-      '',
-      'The system SHALL manage user sessions.',
-      '',
-      '#### Scenario: Session timeout',
-      '- **WHEN** session is idle for 30 minutes',
-      '- **THEN** system expires the session',
+      rule(
+        '@REQ-0002',
+        'Session management',
+        'The system SHALL manage user sessions.',
+        'Session timeout',
+        ['When session is idle for 30 minutes', 'Then system expires the session']
+      ),
       '',
     ].join('\n');
 
     await fs.mkdir(path.join(specsDir, 'auth'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'auth', 'spec.md'), baseSpec, 'utf-8');
+    await fs.writeFile(path.join(specsDir, 'auth', 'spec.feature'), baseSpec, 'utf-8');
 
     // Change proposal
     const proposal = [
@@ -71,36 +89,33 @@ describe('openspec show --diff', () => {
     await fs.mkdir(changeDir, { recursive: true });
     await fs.writeFile(path.join(changeDir, 'proposal.md'), proposal, 'utf-8');
 
-    // Delta spec: one MODIFIED, one ADDED
-    const deltaSpec = [
-      '## MODIFIED Requirements',
-      '',
-      '### Requirement: User login',
-      '',
-      'The system SHALL allow users to log in with email, password, or SSO.',
-      '',
-      '#### Scenario: Valid credentials',
-      '- **WHEN** user provides valid email and password',
-      '- **THEN** system authenticates the user',
-      '',
-      '#### Scenario: SSO login',
-      '- **WHEN** user clicks SSO provider',
-      '- **THEN** system redirects to SSO flow',
-      '',
-      '## ADDED Requirements',
-      '',
-      '### Requirement: Multi-factor authentication',
-      '',
-      'The system SHALL support MFA via TOTP.',
-      '',
-      '#### Scenario: MFA setup',
-      '- **WHEN** user enables MFA',
-      '- **THEN** system generates TOTP secret',
-      '',
-    ].join('\n');
+    // Delta spec: one @modified, one @added
+    const deltaSpec = feature(
+      'Auth',
+      [
+        rule(
+          '@modified @REQ-0001',
+          'User login',
+          'The system SHALL allow users to log in with email, password, or SSO.',
+          'Valid credentials',
+          ['When user provides valid email and password', 'Then system authenticates the user']
+        ),
+        '',
+        '    Scenario: SSO login',
+        '      When user clicks SSO provider',
+        '      Then system redirects to SSO flow',
+      ].join('\n'),
+      rule(
+        '@added @REQ-0003',
+        'Multi-factor authentication',
+        'The system SHALL support MFA via TOTP.',
+        'MFA setup',
+        ['When user enables MFA', 'Then system generates TOTP secret']
+      )
+    );
 
     await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(path.join(changeDir, 'specs', 'auth', 'spec.md'), deltaSpec, 'utf-8');
+    await fs.writeFile(path.join(changeDir, 'specs', 'auth', 'spec.feature'), deltaSpec, 'utf-8');
   });
 
   afterEach(async () => {
@@ -126,33 +141,28 @@ describe('openspec show --diff', () => {
     return { stdout: result.stdout ?? '', stderr: result.stderr ?? '', status: result.status };
   }
 
-  // Task 5.5: text mode diff with MODIFIED and ADDED
-  it('text mode: shows proposal then MODIFIED diff and ADDED full text', () => {
+  it('text mode: shows proposal then @modified diff and @added full text', () => {
     const output = run(['show', 'auth-update', '--type', 'change', '--diff']);
 
     // Proposal should appear first
     expect(output).toContain('Improve auth.');
-    expect(output.indexOf('Improve auth.')).toBeLessThan(
-      output.indexOf('Specifications Changed (diffs)')
-    );
+    expect(output.indexOf('Improve auth.')).toBeLessThan(output.indexOf('Specifications Changed (diffs)'));
 
-    // MODIFIED should show unified diff with changes
-    expect(output).toContain('MODIFIED: User login');
-    expect(output).toContain('-The system SHALL allow users to log in with email and password.');
-    expect(output).toContain('+The system SHALL allow users to log in with email, password, or SSO.');
-    expect(output).toContain('+#### Scenario: SSO login');
+    // @modified shows a unified diff of the rule, without the operation tag
+    expect(output).toContain('MODIFIED: REQ-0001 User login');
+    expect(output).toContain('-    The system SHALL allow users to log in with email and password.');
+    expect(output).toContain('+    The system SHALL allow users to log in with email, password, or SSO.');
+    expect(output).toContain('+    Scenario: SSO login');
+    expect(output).not.toContain('+  @modified');
 
-    // ADDED should show full text
-    expect(output).toContain('ADDED: Multi-factor authentication');
+    // @added shows its full text
+    expect(output).toContain('ADDED: REQ-0003 Multi-factor authentication');
     expect(output).toContain('The system SHALL support MFA via TOTP.');
   });
 
   it('text mode: without --diff the output is the proposal, unchanged', async () => {
     const output = run(['show', 'auth-update', '--type', 'change']);
-    const proposal = await fs.readFile(
-      path.join(changesDir, 'auth-update', 'proposal.md'),
-      'utf-8'
-    );
+    const proposal = await fs.readFile(path.join(changesDir, 'auth-update', 'proposal.md'), 'utf-8');
 
     // `show <change>` stays a raw proposal passthrough: --diff is additive, so
     // anything already parsing this output keeps seeing exactly what it saw.
@@ -160,50 +170,29 @@ describe('openspec show --diff', () => {
     expect(output).not.toContain('Specifications Changed');
   });
 
-  // Task 5.7: MODIFIED with no matching base
-  it('text mode: shows warning when MODIFIED has no matching base', async () => {
-    // Add a delta that references a nonexistent base requirement
-    const noMatchDelta = [
-      '## MODIFIED Requirements',
-      '',
-      '### Requirement: Nonexistent base',
-      '',
-      'The system SHALL do something new.',
-      '',
-      '#### Scenario: Works',
-      '- **WHEN** called',
-      '- **THEN** works',
-      '',
-    ].join('\n');
-
-    const changeDir = path.join(changesDir, 'no-match');
-    await fs.mkdir(changeDir, { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nTest.\n\n## What Changes\n- **auth:** Modify\n',
-      'utf-8',
-    );
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'auth', 'spec.md'),
-      noMatchDelta,
-      'utf-8',
+  it('text mode: shows a warning when the @modified ID is not in the main spec', async () => {
+    await writeChange(
+      'no-match',
+      'Test.',
+      'auth',
+      feature(
+        'Auth',
+        rule('@modified @REQ-0042', 'Nonexistent base', 'The system SHALL do something new.', 'Works', [
+          'When called',
+          'Then works',
+        ])
+      )
     );
 
     const output = run(['show', 'no-match', '--type', 'change', '--diff']);
-    expect(output).toContain('MODIFIED: Nonexistent base');
-    expect(output).toContain('No matching main requirement found');
+    expect(output).toContain('MODIFIED: REQ-0042 Nonexistent base');
+    expect(output).toContain('No requirement REQ-0042 in the main spec of auth');
   });
 
-  // Task 5.3: no delta specs — say so rather than printing an empty heading
   it('text mode: reports when the change has no delta specs to diff', async () => {
     const changeDir = path.join(changesDir, 'empty-change');
     await fs.mkdir(changeDir, { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nTest reason.\n\n## What Changes\n- nothing\n',
-      'utf-8',
-    );
+    await fs.writeFile(path.join(changeDir, 'proposal.md'), '## Why\nTest reason.\n\n## What Changes\n- nothing\n', 'utf-8');
 
     const output = run(['show', 'empty-change', '--type', 'change', '--diff']);
     expect(output).toContain('Test reason.');
@@ -211,69 +200,73 @@ describe('openspec show --diff', () => {
     expect(output).not.toContain('Specifications Changed');
   });
 
-  it('text mode: keeps the Reason and Migration text of a REMOVED requirement', async () => {
-    const removedDelta = [
-      '## REMOVED Requirements',
-      '',
-      '### Requirement: Session management',
-      '',
-      '**Reason**: Sessions moved to the token service.',
-      '',
-      '**Migration**: Callers switch to `POST /tokens`.',
-      '',
-    ].join('\n');
-
-    const changeDir = path.join(changesDir, 'drop-sessions');
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nSessions move.\n\n## What Changes\n- **auth:** Remove session management\n',
-      'utf-8'
+  it('text mode: keeps the reason written under a @removed rule', async () => {
+    await writeChange(
+      'drop-sessions',
+      'Sessions move.',
+      'auth',
+      feature(
+        'Auth',
+        [
+          '  @removed @REQ-0002',
+          '  Rule: Session management',
+          '    Reason: Sessions moved to the token service.',
+          '    Migration: Callers switch to `POST /tokens`.',
+        ].join('\n')
+      )
     );
-    await fs.writeFile(path.join(changeDir, 'specs', 'auth', 'spec.md'), removedDelta, 'utf-8');
 
     const output = run(['show', 'drop-sessions', '--type', 'change', '--diff']);
-    expect(output).toContain('REMOVED: Session management');
+    expect(output).toContain('REMOVED: REQ-0002 Session management');
     expect(output).toContain('Sessions moved to the token service.');
     expect(output).toContain('Callers switch to `POST /tokens`.');
   });
 
-  it('flags a MODIFIED header that differs from the main spec only in spacing', async () => {
-    const changeDir = path.join(changesDir, 'near-miss');
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nTypo.\n\n## What Changes\n- **auth:** Modify login\n',
-      'utf-8'
-    );
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'auth', 'spec.md'),
-      [
-        '## MODIFIED Requirements',
-        '',
-        '### Requirement: User  login',
-        '',
-        'The system SHALL allow users to log in with a passkey.',
-        '',
-        '#### Scenario: Valid credentials',
-        '- **WHEN** user presents a passkey',
-        '- **THEN** system authenticates the user',
-        '',
-      ].join('\n'),
-      'utf-8'
+  it('diffs a rename against the requirement with the same ID', async () => {
+    await writeChange(
+      'rename-change',
+      'Rename.',
+      'auth',
+      feature(
+        'Auth',
+        rule(
+          '@modified @REQ-0002',
+          'Session lifecycle',
+          'The system SHALL manage user sessions with configurable timeout.',
+          'Session timeout',
+          ['When session is idle for configurable duration', 'Then system expires the session']
+        )
+      )
     );
 
-    const output = run(['show', 'near-miss', '--type', 'change', '--diff']);
-    // The diff the author meant is still shown...
-    expect(output).toContain('+The system SHALL allow users to log in with a passkey.');
-    // ...along with the mismatch archive would reject.
-    expect(output).toContain('only in case or spacing');
-    expect(output).toContain('"User login"');
+    const output = run(['show', 'rename-change', '--type', 'change', '--diff']);
+    expect(output).toContain('MODIFIED: REQ-0002 Session lifecycle');
+    expect(output).toContain('-  Rule: Session management');
+    expect(output).toContain('+  Rule: Session lifecycle');
+    expect(output).toContain('-    The system SHALL manage user sessions.');
+    expect(output).toContain('+    The system SHALL manage user sessions with configurable timeout.');
 
-    const json = JSON.parse(run(['show', 'near-miss', '--type', 'change', '--diff', '--json']));
-    const modified = json.deltas.find((delta: any) => delta.operation === 'MODIFIED');
-    expect(modified.diff).toContain('+The system SHALL allow users to log in with a passkey.');
-    expect(modified.warning).toContain('only in case or spacing');
+    const json = JSON.parse(run(['show', 'rename-change', '--type', 'change', '--diff', '--json']));
+    const modified = json.deltas.find((d: any) => d.operation === 'MODIFIED');
+    expect(modified.diff).toContain('+  Rule: Session lifecycle');
+    expect(modified.warning).toBeUndefined();
+  });
+
+  it('warns about a @modified rule with no ID instead of guessing its base', async () => {
+    await writeChange(
+      'no-id',
+      'Untagged.',
+      'auth',
+      feature(
+        'Auth',
+        rule('@modified', 'User login', 'The system SHALL allow passkeys.', 'Passkey', ['When a passkey is used', 'Then it works'])
+      )
+    );
+
+    const json = JSON.parse(run(['show', 'no-id', '--type', 'change', '--diff', '--json']));
+    const modified = json.deltas.find((d: any) => d.operation === 'MODIFIED');
+    expect(modified.diff).toBeUndefined();
+    expect(modified.warning).toContain('has no requirement ID');
   });
 
   it('propagates delta discovery failures instead of reporting no delta specs', async () => {
@@ -293,7 +286,7 @@ describe('openspec show --diff', () => {
   });
 
   it('propagates main-spec read failures instead of reporting the spec missing', async () => {
-    const mainSpecPath = path.join(specsDir, 'auth', 'spec.md');
+    const mainSpecPath = path.join(specsDir, 'auth', 'spec.feature');
     await fs.rm(mainSpecPath);
     await fs.mkdir(mainSpecPath);
 
@@ -303,115 +296,84 @@ describe('openspec show --diff', () => {
     expect(result.stdout).not.toContain('No main spec at');
   });
 
-  it('warns instead of inventing a diff when a MODIFIED spec has no main spec', async () => {
-    const changeDir = path.join(changesDir, 'no-main-spec');
-    await fs.mkdir(path.join(changeDir, 'specs', 'billing'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nBilling.\n\n## What Changes\n- **billing:** Modify billing\n',
-      'utf-8'
-    );
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'billing', 'spec.md'),
-      [
-        '## MODIFIED Requirements',
-        '',
-        '### Requirement: Billing',
-        '',
-        'The system SHALL bill monthly.',
-        '',
-        '#### Scenario: Monthly',
-        '- **WHEN** a month ends',
-        '- **THEN** a bill is sent',
-        '',
-      ].join('\n'),
-      'utf-8'
+  it('warns instead of inventing a diff when a @modified spec has no main spec', async () => {
+    await writeChange(
+      'no-main-spec',
+      'Billing.',
+      'billing',
+      feature(
+        'Billing',
+        rule('@modified @REQ-0009', 'Billing', 'The system SHALL bill monthly.', 'Monthly', [
+          'When a month ends',
+          'Then a bill is sent',
+        ])
+      )
     );
 
     const output = run(['show', 'no-main-spec', '--type', 'change', '--diff']);
-    expect(output).toContain('MODIFIED: Billing');
-    expect(output).toContain('No main spec at openspec/specs/billing/spec.md');
+    expect(output).toContain('MODIFIED: REQ-0009 Billing');
+    expect(output).toContain('No main spec at openspec/specs/billing/spec.feature');
     // The requirement text is still shown, but not dressed up as a diff.
     expect(output).toContain('The system SHALL bill monthly.');
-    expect(output).not.toContain('+The system SHALL bill monthly.');
+    expect(output).not.toContain('+    The system SHALL bill monthly.');
 
     const json = JSON.parse(run(['show', 'no-main-spec', '--type', 'change', '--diff', '--json']));
     const modified = json.deltas.find((d: any) => d.operation === 'MODIFIED');
     expect(modified.diff).toBeUndefined();
-    expect(modified.warning).toContain('No main spec at openspec/specs/billing/spec.md');
+    expect(modified.warning).toContain('No main spec at openspec/specs/billing/spec.feature');
   });
 
-  it('diffs a nested capability (specs/<area>/<id>/spec.md)', async () => {
+  it('diffs a nested capability (specs/<area>/<id>/spec.feature)', async () => {
     await fs.mkdir(path.join(specsDir, 'platform', 'session-layout'), { recursive: true });
     await fs.writeFile(
-      path.join(specsDir, 'platform', 'session-layout', 'spec.md'),
+      path.join(specsDir, 'platform', 'session-layout', 'spec.feature'),
       [
-        '# session-layout Specification',
+        'Feature: Session layout',
+        '  Session layout.',
         '',
-        '## Purpose',
-        'Session layout.',
-        '',
-        '## Requirements',
-        '### Requirement: Layout',
-        '',
-        'The system SHALL render two panes.',
-        '',
-        '#### Scenario: Two panes',
-        '- **WHEN** the session opens',
-        '- **THEN** two panes render',
+        rule('@REQ-0005', 'Layout', 'The system SHALL render two panes.', 'Two panes', [
+          'When the session opens',
+          'Then two panes render',
+        ]),
         '',
       ].join('\n'),
       'utf-8'
     );
-
-    const changeDir = path.join(changesDir, 'nested-change');
-    await fs.mkdir(path.join(changeDir, 'specs', 'platform', 'session-layout'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nMore panes.\n\n## What Changes\n- **platform/session-layout:** Add a pane\n',
-      'utf-8'
-    );
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'platform', 'session-layout', 'spec.md'),
-      [
-        '## MODIFIED Requirements',
-        '',
-        '### Requirement: Layout',
-        '',
-        'The system SHALL render three panes.',
-        '',
-        '#### Scenario: Two panes',
-        '- **WHEN** the session opens',
-        '- **THEN** three panes render',
-        '',
-      ].join('\n'),
-      'utf-8'
+    await writeChange(
+      'nested-change',
+      'More panes.',
+      'platform/session-layout',
+      feature(
+        'Session layout',
+        rule('@modified @REQ-0005', 'Layout', 'The system SHALL render three panes.', 'Two panes', [
+          'When the session opens',
+          'Then three panes render',
+        ])
+      )
     );
 
     const output = run(['show', 'nested-change', '--type', 'change', '--diff']);
     expect(output).toContain('platform/session-layout');
-    expect(output).toContain('MODIFIED: Layout');
-    expect(output).toContain('-The system SHALL render two panes.');
-    expect(output).toContain('+The system SHALL render three panes.');
+    expect(output).toContain('MODIFIED: REQ-0005 Layout');
+    expect(output).toContain('-    The system SHALL render two panes.');
+    expect(output).toContain('+    The system SHALL render three panes.');
 
     const json = JSON.parse(run(['show', 'nested-change', '--type', 'change', '--diff', '--json']));
     const modified = json.deltas.find((d: any) => d.operation === 'MODIFIED');
     expect(modified.spec).toBe('platform/session-layout');
-    expect(modified.diff).toContain('+The system SHALL render three panes.');
+    expect(modified.diff).toContain('+    The system SHALL render three panes.');
   });
 
   it('warns and ignores --diff when the item is a spec', async () => {
     const { stdout, stderr } = runWithStderr(['show', 'auth', '--type', 'spec', '--diff']);
     expect(stderr).toContain('Ignoring flags not applicable to spec');
     expect(stderr).toContain('diff');
-    expect(stdout).toContain('### Requirement: User login');
+    expect(stdout).toContain('Rule: User login');
     expect(stdout).not.toContain('Specifications Changed');
   });
 
-  // Task 6.2: JSON mode includes diff on MODIFIED only
   it('JSON mode: includes diff field on MODIFIED, not on ADDED', () => {
-    const output = run(['show', 'auth-update', '--type', 'change', '--diff', '--json']);
-    const json = JSON.parse(output);
+    const json = JSON.parse(run(['show', 'auth-update', '--type', 'change', '--diff', '--json']));
 
     // --json --diff uses the same top-level structure as --json alone
     expect(json.id).toBe('auth-update');
@@ -421,9 +383,8 @@ describe('openspec show --diff', () => {
 
     const modified = json.deltas.find((d: any) => d.operation === 'MODIFIED');
     expect(modified).toBeDefined();
-    expect(modified.diff).toBeDefined();
-    expect(modified.diff).toContain('-The system SHALL allow users to log in with email and password.');
-    expect(modified.diff).toContain('+The system SHALL allow users to log in with email, password, or SSO.');
+    expect(modified.diff).toContain('-    The system SHALL allow users to log in with email and password.');
+    expect(modified.diff).toContain('+    The system SHALL allow users to log in with email, password, or SSO.');
 
     const added = json.deltas.find((d: any) => d.operation === 'ADDED');
     expect(added).toBeDefined();
@@ -431,38 +392,31 @@ describe('openspec show --diff', () => {
   });
 
   it('JSON mode: attaches each diff to its own requirement when one spec has several', async () => {
-    // Two MODIFIED requirements in one delta file: the JSON deltas and the
-    // parsed blocks are paired by source order, so a mismatch here would show a
+    // Two @modified rules in one delta file: the JSON deltas and the parsed
+    // rules are paired by source order, so a mismatch here would show a
     // reviewer one requirement's changes under another's name.
-    const deltaSpec = [
-      '## MODIFIED Requirements',
-      '',
-      '### Requirement: Session management',
-      '',
-      'The system SHALL manage user sessions for 60 minutes.',
-      '',
-      '#### Scenario: Session timeout',
-      '- **WHEN** session is idle for 60 minutes',
-      '- **THEN** system expires the session',
-      '',
-      '### Requirement: User login',
-      '',
-      'The system SHALL allow users to log in with a passkey.',
-      '',
-      '#### Scenario: Valid credentials',
-      '- **WHEN** user presents a passkey',
-      '- **THEN** system authenticates the user',
-      '',
-    ].join('\n');
-
-    const changeDir = path.join(changesDir, 'two-mods');
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nTwo edits.\n\n## What Changes\n- **auth:** Modify login and sessions\n',
-      'utf-8'
+    await writeChange(
+      'two-mods',
+      'Two edits.',
+      'auth',
+      feature(
+        'Auth',
+        rule(
+          '@modified @REQ-0002',
+          'Session management',
+          'The system SHALL manage user sessions for 60 minutes.',
+          'Session timeout',
+          ['When session is idle for 60 minutes', 'Then system expires the session']
+        ),
+        rule(
+          '@modified @REQ-0001',
+          'User login',
+          'The system SHALL allow users to log in with a passkey.',
+          'Valid credentials',
+          ['When user presents a passkey', 'Then system authenticates the user']
+        )
+      )
     );
-    await fs.writeFile(path.join(changeDir, 'specs', 'auth', 'spec.md'), deltaSpec, 'utf-8');
 
     const json = JSON.parse(run(['show', 'two-mods', '--type', 'change', '--diff', '--json']));
     const modified = json.deltas.filter((d: any) => d.operation === 'MODIFIED');
@@ -471,47 +425,34 @@ describe('openspec show --diff', () => {
     for (const delta of modified) {
       expect(delta.diff).toBeDefined();
       if (delta.description.includes('passkey')) {
-        expect(delta.diff).toContain('+The system SHALL allow users to log in with a passkey.');
+        expect(delta.diff).toContain('+    The system SHALL allow users to log in with a passkey.');
         expect(delta.diff).not.toContain('60 minutes');
       } else {
-        expect(delta.diff).toContain('+The system SHALL manage user sessions for 60 minutes.');
+        expect(delta.diff).toContain('+    The system SHALL manage user sessions for 60 minutes.');
         expect(delta.diff).not.toContain('passkey');
       }
     }
   });
 
   it('text mode: distinguishes an empty diff from a missing base', async () => {
-    const changeDir = path.join(changesDir, 'unchanged-modification');
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nReview an unchanged block.\n\n## What Changes\n- **auth:** Restate sessions\n',
-      'utf-8'
-    );
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'auth', 'spec.md'),
-      [
-        '## MODIFIED Requirements',
-        '',
-        '### Requirement: Session management',
-        '',
-        'The system SHALL manage user sessions.',
-        '',
-        '#### Scenario: Session timeout',
-        '- **WHEN** session is idle for 30 minutes',
-        '- **THEN** system expires the session',
-        '',
-      ].join('\n'),
-      'utf-8'
+    await writeChange(
+      'unchanged-modification',
+      'Review an unchanged block.',
+      'auth',
+      feature(
+        'Auth',
+        rule('@modified @REQ-0002', 'Session management', 'The system SHALL manage user sessions.', 'Session timeout', [
+          'When session is idle for 30 minutes',
+          'Then system expires the session',
+        ])
+      )
     );
 
     const output = run(['show', 'unchanged-modification', '--type', 'change', '--diff']);
-    expect(output).toContain('MODIFIED: Session management');
+    expect(output).toContain('MODIFIED: REQ-0002 Session management');
     expect(output).toContain('(no textual changes)');
 
-    const json = JSON.parse(
-      run(['show', 'unchanged-modification', '--type', 'change', '--diff', '--json'])
-    );
+    const json = JSON.parse(run(['show', 'unchanged-modification', '--type', 'change', '--diff', '--json']));
     const modified = json.deltas.find((delta: any) => delta.operation === 'MODIFIED');
     expect(modified.diff).toBe('');
     expect(modified.warning).toBeUndefined();
@@ -533,146 +474,5 @@ describe('openspec show --diff', () => {
       expect(jsonDiff.deltas[i].spec).toBe(jsonOnly.deltas[i].spec);
       expect(jsonDiff.deltas[i].operation).toBe(jsonOnly.deltas[i].operation);
     }
-  });
-
-  // Task 5.6: RENAMED + MODIFIED with base lookup by old name
-  it('text mode: RENAMED + MODIFIED looks up base by old name', async () => {
-    const deltaSpec = [
-      '## RENAMED Requirements',
-      '',
-      'FROM: ### Requirement: Session management',
-      'TO: ### Requirement: Session lifecycle',
-      '',
-      '## MODIFIED Requirements',
-      '',
-      '### Requirement: Session lifecycle',
-      '',
-      'The system SHALL manage user sessions with configurable timeout.',
-      '',
-      '#### Scenario: Session timeout',
-      '- **WHEN** session is idle for configurable duration',
-      '- **THEN** system expires the session',
-      '',
-    ].join('\n');
-
-    const changeDir = path.join(changesDir, 'rename-change');
-    await fs.mkdir(changeDir, { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nRename.\n\n## What Changes\n- **auth:** Rename and modify session\n',
-      'utf-8',
-    );
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'auth', 'spec.md'),
-      deltaSpec,
-      'utf-8',
-    );
-
-    const output = run(['show', 'rename-change', '--type', 'change', '--diff']);
-
-    // Proposal shown first
-    expect(output).toContain('Rename.');
-    expect(output.indexOf('Rename.')).toBeLessThan(
-      output.indexOf('Specifications Changed (diffs)')
-    );
-
-    // RENAMED should appear
-    expect(output).toContain('RENAMED: Session management');
-    expect(output).toContain('Session lifecycle');
-
-    // MODIFIED should show diff against the old "Session management" base
-    expect(output).toContain('MODIFIED: Session lifecycle');
-    expect(output).toContain('+The system SHALL manage user sessions with configurable timeout.');
-    expect(output).toContain('-The system SHALL manage user sessions.');
-  });
-
-  // Task 6.3: JSON RENAMED + MODIFIED
-  it('JSON mode: RENAMED + MODIFIED has diff relative to old-name base', async () => {
-    const deltaSpec = [
-      '## RENAMED Requirements',
-      '',
-      'FROM: ### Requirement: Session management',
-      'TO: ### Requirement: Session lifecycle',
-      '',
-      '## MODIFIED Requirements',
-      '',
-      '### Requirement: Session lifecycle',
-      '',
-      'The system SHALL manage user sessions with configurable timeout.',
-      '',
-      '#### Scenario: Session timeout',
-      '- **WHEN** session is idle for configurable duration',
-      '- **THEN** system expires the session',
-      '',
-    ].join('\n');
-
-    const changeDir = path.join(changesDir, 'rename-json');
-    await fs.mkdir(changeDir, { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nRename.\n\n## What Changes\n- **auth:** Rename and modify session\n',
-      'utf-8',
-    );
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'auth', 'spec.md'),
-      deltaSpec,
-      'utf-8',
-    );
-
-    const output = run(['show', 'rename-json', '--type', 'change', '--diff', '--json']);
-    const json = JSON.parse(output);
-
-    expect(json.id).toBe('rename-json');
-
-    const renamed = json.deltas.find((d: any) => d.operation === 'RENAMED');
-    expect(renamed).toBeDefined();
-    expect(renamed.diff).toBeUndefined();
-
-    const modified = json.deltas.find((d: any) => d.operation === 'MODIFIED');
-    expect(modified).toBeDefined();
-    expect(modified.diff).toBeDefined();
-    expect(modified.diff).toContain('-The system SHALL manage user sessions.');
-    expect(modified.diff).toContain('+The system SHALL manage user sessions with configurable timeout.');
-  });
-
-  it('RENAMED chain plus MODIFIED diffs against the original main name', async () => {
-    const changeDir = path.join(changesDir, 'rename-chain');
-    await fs.mkdir(path.join(changeDir, 'specs', 'auth'), { recursive: true });
-    await fs.writeFile(
-      path.join(changeDir, 'proposal.md'),
-      '## Why\nRename twice.\n\n## What Changes\n- **auth:** Rename session management\n',
-      'utf-8'
-    );
-    await fs.writeFile(
-      path.join(changeDir, 'specs', 'auth', 'spec.md'),
-      [
-        '## RENAMED Requirements',
-        '',
-        'FROM: ### Requirement: Session management',
-        'TO: ### Requirement: Session lifecycle',
-        '',
-        'FROM: ### Requirement: Session lifecycle',
-        'TO: ### Requirement: Session policy',
-        '',
-        '## MODIFIED Requirements',
-        '',
-        '### Requirement: Session policy',
-        '',
-        'The system SHALL manage sessions with a configurable timeout.',
-        '',
-        '#### Scenario: Session timeout',
-        '- **WHEN** the configured timeout elapses',
-        '- **THEN** system expires the session',
-        '',
-      ].join('\n'),
-      'utf-8'
-    );
-
-    const output = run(['show', 'rename-chain', '--type', 'change', '--diff']);
-    expect(output).toContain('-The system SHALL manage user sessions.');
-    expect(output).toContain('+The system SHALL manage sessions with a configurable timeout.');
-    expect(output).not.toContain('No matching main requirement found');
   });
 });

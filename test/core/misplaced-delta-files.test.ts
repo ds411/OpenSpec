@@ -20,13 +20,27 @@ vi.mock('../../src/utils/interactive.js', async (importOriginal) => {
 
 /**
  * validate and archive read a change's deltas only from
- * specs/<capability-path>/spec.md, but the spec-driven artifact graph counts
- * any specs/**.md as the specs being written. A delta written anywhere else,
- * such as specs/user-auth.md, was reported done by status and ready by apply,
+ * specs/<capability-path>/spec.feature, but the spec-driven artifact graph counts
+ * any specs/**.feature as the specs being written. A delta written anywhere else,
+ * such as specs/user-auth.feature, was reported done by status and ready by apply,
  * rejected by validate as "no deltas", and then archived with exit 0 and
  * nothing merged into openspec/specs/.
  */
 const DELTA = [
+  'Feature: User auth',
+  '',
+  '  @added @REQ-0001',
+  '  Rule: Password Login',
+  '    The system SHALL let a user sign in with a password.',
+  '',
+  '    Scenario: Valid password',
+  '      When a user submits a valid password',
+  '      Then a session is created',
+  '',
+].join('\n');
+
+/** The same delta in the markdown format specs used before they were Gherkin. */
+const LEGACY_DELTA = [
   '## ADDED Requirements',
   '',
   '### Requirement: Password Login',
@@ -59,56 +73,56 @@ describe('findUnreadDeltaFiles', () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it('reports a delta written as specs/<capability>.md', async () => {
-    await write(specsDir, ['user-auth.md'], DELTA);
+  it('reports a delta written as specs/<capability>.feature', async () => {
+    await write(specsDir, ['user-auth.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([
-      { path: 'user-auth.md', expected: 'user-auth/spec.md' },
+      { path: 'user-auth.feature', expected: 'user-auth/spec.feature', legacyMarkdown: false },
     ]);
   });
 
   it('reports a delta in a capability folder under another name', async () => {
-    await write(specsDir, ['user-auth', 'delta.md'], DELTA);
+    await write(specsDir, ['user-auth', 'delta.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([
-      { path: 'user-auth/delta.md', expected: 'user-auth/spec.md' },
+      { path: 'user-auth/delta.feature', expected: 'user-auth/spec.feature', legacyMarkdown: false },
     ]);
   });
 
-  it('reports a stray delta beside a capability spec.md', async () => {
-    await write(specsDir, ['user-auth', 'spec.md'], DELTA);
-    await write(specsDir, ['user-auth', 'more.md'], DELTA);
+  it('reports a stray delta beside a capability spec.feature', async () => {
+    await write(specsDir, ['user-auth', 'spec.feature'], DELTA);
+    await write(specsDir, ['user-auth', 'more.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([
-      { path: 'user-auth/more.md', expected: 'user-auth/spec.md' },
+      { path: 'user-auth/more.feature', expected: 'user-auth/spec.feature', legacyMarkdown: false },
     ]);
   });
 
   it('reports one inside a nested area folder', async () => {
-    await write(specsDir, ['platform', 'session', 'changes.md'], DELTA);
+    await write(specsDir, ['platform', 'session', 'changes.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([
-      { path: 'platform/session/changes.md', expected: 'platform/session/spec.md' },
+      { path: 'platform/session/changes.feature', expected: 'platform/session/spec.feature', legacyMarkdown: false },
     ]);
   });
 
   it('reports a spec file whose name differs only in case', async () => {
-    await write(specsDir, ['user-auth', 'SPEC.md'], DELTA);
+    await write(specsDir, ['user-auth', 'SPEC.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([
-      { path: 'user-auth/SPEC.md', expected: 'user-auth/spec.md' },
+      { path: 'user-auth/SPEC.feature', expected: 'user-auth/spec.feature', legacyMarkdown: false },
     ]);
   });
 
   it('ignores the flat and nested layouts the merge path reads', async () => {
-    await write(specsDir, ['user-auth', 'spec.md'], DELTA);
-    await write(specsDir, ['platform', 'session', 'spec.md'], DELTA);
+    await write(specsDir, ['user-auth', 'spec.feature'], DELTA);
+    await write(specsDir, ['platform', 'session', 'spec.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([]);
   });
 
-  it('leaves a specs/-root spec.md to its own check', async () => {
-    await write(specsDir, ['spec.md'], DELTA);
+  it('leaves a specs/-root spec.feature to its own check', async () => {
+    await write(specsDir, ['spec.feature'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([]);
   });
 
   it('ignores notes with no delta section', async () => {
     await write(specsDir, ['README.md'], '# Notes\n\nWhy these specs are organized this way.\n');
-    await write(specsDir, ['user-auth', 'spec.md'], DELTA);
+    await write(specsDir, ['user-auth', 'spec.feature'], DELTA);
     await write(specsDir, ['user-auth', 'notes.md'], '# Notes\n\nOpen questions for review.\n');
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([]);
   });
@@ -123,18 +137,25 @@ describe('findUnreadDeltaFiles', () => {
   });
 
   it('skips dot entries and non-markdown files', async () => {
-    await write(specsDir, ['.drafts', 'user-auth.md'], DELTA);
-    await write(specsDir, ['.hidden.md'], DELTA);
+    await write(specsDir, ['.drafts', 'user-auth.feature'], DELTA);
+    await write(specsDir, ['.hidden.feature'], DELTA);
     await write(specsDir, ['user-auth.txt'], DELTA);
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([]);
   });
 
   it('returns results sorted by path', async () => {
-    await write(specsDir, ['zeta.md'], DELTA);
-    await write(specsDir, ['alpha', 'delta.md'], DELTA);
+    await write(specsDir, ['zeta.feature'], DELTA);
+    await write(specsDir, ['alpha', 'delta.feature'], DELTA);
     expect((await findUnreadDeltaFiles(specsDir)).map((file) => file.path)).toEqual([
-      'alpha/delta.md',
-      'zeta.md',
+      'alpha/delta.feature',
+      'zeta.feature',
+    ]);
+  });
+
+  it('reports a markdown delta in the old format, so it can be converted', async () => {
+    await write(specsDir, ['user-auth', 'spec.md'], LEGACY_DELTA);
+    expect(await findUnreadDeltaFiles(specsDir)).toEqual([
+      { path: 'user-auth/spec.md', expected: 'user-auth/spec.feature', legacyMarkdown: true },
     ]);
   });
 
@@ -144,7 +165,7 @@ describe('findUnreadDeltaFiles', () => {
 
   it.skipIf(process.platform === 'win32')('skips a dangling symlink', async () => {
     await fs.mkdir(specsDir, { recursive: true });
-    await fs.symlink(path.join(tempDir, 'missing.md'), path.join(specsDir, 'ghost.md'));
+    await fs.symlink(path.join(tempDir, 'missing.feature'), path.join(specsDir, 'ghost.feature'));
     expect(await findUnreadDeltaFiles(specsDir)).toEqual([]);
   });
 });
@@ -162,41 +183,52 @@ describe('validate with an unread delta file', () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it('rejects specs/<capability>.md, naming the file and where it belongs', async () => {
-    await write(changeDir, ['specs', 'user-auth.md'], DELTA);
+  it('rejects specs/<capability>.feature, naming the file and where it belongs', async () => {
+    await write(changeDir, ['specs', 'user-auth.feature'], DELTA);
 
     const report = await new Validator(true).validateChangeDeltaSpecs(changeDir);
 
     expect(report.valid).toBe(false);
-    const issue = report.issues.find((i) => i.path === 'user-auth.md');
+    const issue = report.issues.find((i) => i.path === 'user-auth.feature');
     expect(issue?.level).toBe('ERROR');
-    expect(issue?.message).toContain('specs/user-auth.md');
-    expect(issue?.message).toContain('specs/user-auth/spec.md');
+    expect(issue?.message).toContain('specs/user-auth.feature');
+    expect(issue?.message).toContain('specs/user-auth/spec.feature');
     // The precise error replaces the generic one, which would say "No deltas
     // found" about deltas sitting in the file it just named.
     expect(report.issues.some((i) => i.message.includes('No deltas found'))).toBe(false);
   });
 
-  it('rejects a stray delta file even when the capability spec.md is valid', async () => {
-    await write(changeDir, ['specs', 'user-auth', 'spec.md'], DELTA);
-    await write(changeDir, ['specs', 'user-auth', 'more.md'], DELTA);
+  it('rejects a stray delta file even when the capability spec.feature is valid', async () => {
+    await write(changeDir, ['specs', 'user-auth', 'spec.feature'], DELTA);
+    await write(changeDir, ['specs', 'user-auth', 'more.feature'], DELTA);
 
     const report = await new Validator(true).validateChangeDeltaSpecs(changeDir);
 
     expect(report.valid).toBe(false);
-    expect(report.issues.find((i) => i.path === 'user-auth/more.md')?.level).toBe('ERROR');
+    expect(report.issues.find((i) => i.path === 'user-auth/more.feature')?.level).toBe('ERROR');
   });
 
-  it('control: accepts the nested layout specs/<area>/<capability>/spec.md', async () => {
-    await write(changeDir, ['specs', 'platform', 'session', 'spec.md'], DELTA);
+  it('control: accepts the nested layout specs/<area>/<capability>/spec.feature', async () => {
+    await write(changeDir, ['specs', 'platform', 'session', 'spec.feature'], DELTA);
 
     const report = await new Validator(true).validateChangeDeltaSpecs(changeDir);
 
     expect(report.valid).toBe(true);
   });
 
+  it('rejects a markdown delta and points at "openspec convert-specs"', async () => {
+    await write(changeDir, ['specs', 'user-auth', 'spec.md'], LEGACY_DELTA);
+
+    const report = await new Validator().validateChangeDeltaSpecs(changeDir);
+
+    expect(report.valid).toBe(false);
+    const issue = report.issues.find((i) => i.path === 'user-auth/spec.md');
+    expect(issue?.message).toContain('openspec convert-specs');
+    expect(report.issues.some((i) => i.message.includes('No deltas found'))).toBe(false);
+  });
+
   it('control: accepts notes beside a valid delta', async () => {
-    await write(changeDir, ['specs', 'user-auth', 'spec.md'], DELTA);
+    await write(changeDir, ['specs', 'user-auth', 'spec.feature'], DELTA);
     await write(changeDir, ['specs', 'README.md'], '# Notes\n\nPlain notes.\n');
 
     const report = await new Validator(true).validateChangeDeltaSpecs(changeDir);
@@ -250,25 +282,25 @@ describe('archive with an unread delta file', () => {
     (await fs.readdir(path.join(tempDir, 'openspec', 'changes', 'archive'))).some((entry) =>
       entry.endsWith(name)
     );
-  const mainSpec = () => path.join(tempDir, 'openspec', 'specs', 'user-auth', 'spec.md');
+  const mainSpec = () => path.join(tempDir, 'openspec', 'specs', 'user-auth', 'spec.feature');
 
-  it('refuses to archive when the only delta is specs/<capability>.md', async () => {
-    const changeDir = await change('flat-delta', [[['user-auth.md'], DELTA]]);
+  it('refuses to archive when the only delta is specs/<capability>.feature', async () => {
+    const changeDir = await change('flat-delta', [[['user-auth.feature'], DELTA]]);
 
     await archiveCommand.execute('flat-delta', { yes: true });
 
     expect(process.exitCode).toBe(1);
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Validation failed'));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('specs/user-auth/spec.md'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('specs/user-auth/spec.feature'));
     expect(await archived('flat-delta')).toBe(false);
     expect(await exists(changeDir)).toBe(true);
     expect(await exists(mainSpec())).toBe(false);
   });
 
-  it('refuses to archive when a stray delta sits beside a valid spec.md', async () => {
+  it('refuses to archive when a stray delta sits beside a valid spec.feature', async () => {
     await change('stray-delta', [
-      [['user-auth', 'spec.md'], DELTA],
-      [['user-auth', 'more.md'], DELTA.replace('Password Login', 'Passkey Login')],
+      [['user-auth', 'spec.feature'], DELTA],
+      [['user-auth', 'more.feature'], DELTA.replace('Password Login', 'Passkey Login')],
     ]);
 
     await archiveCommand.execute('stray-delta', { yes: true });
@@ -279,7 +311,7 @@ describe('archive with an unread delta file', () => {
   });
 
   it('still archives with --no-validate, the documented escape hatch', async () => {
-    await change('flat-no-validate', [[['user-auth.md'], DELTA]]);
+    await change('flat-no-validate', [[['user-auth.feature'], DELTA]]);
 
     await archiveCommand.execute('flat-no-validate', { yes: true, noValidate: true });
 
@@ -296,8 +328,8 @@ describe('archive with an unread delta file', () => {
     expect(await archived('tooling-only')).toBe(true);
   });
 
-  it('control: specs/<capability>/spec.md archives and merges', async () => {
-    await change('nested-delta', [[['user-auth', 'spec.md'], DELTA]]);
+  it('control: specs/<capability>/spec.feature archives and merges', async () => {
+    await change('nested-delta', [[['user-auth', 'spec.feature'], DELTA]]);
 
     await archiveCommand.execute('nested-delta', { yes: true });
 
@@ -323,32 +355,32 @@ describe('instructions apply with an unread delta file', () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it('warns about specs/<capability>.md, exactly when the validator rejects it', async () => {
-    await write(changeDir, ['specs', 'user-auth.md'], DELTA);
+  it('warns about specs/<capability>.feature, exactly when the validator rejects it', async () => {
+    await write(changeDir, ['specs', 'user-auth.feature'], DELTA);
 
     const instructions = await generateApplyInstructions(tempDir, 'my-change');
     const report = await new Validator().validateChangeDeltaSpecs(changeDir);
 
     expect(instructions.state).toBe('all_done');
     expect(instructions.warnings).toHaveLength(1);
-    expect(instructions.warnings?.[0]).toContain('specs/user-auth.md');
-    expect(instructions.warnings?.[0]).toContain('specs/user-auth/spec.md');
+    expect(instructions.warnings?.[0]).toContain('specs/user-auth.feature');
+    expect(instructions.warnings?.[0]).toContain('specs/user-auth/spec.feature');
     expect(instructions.warnings?.[0]).toContain('openspec validate my-change');
     expect(report.valid).toBe(false);
   });
 
-  it('names a stray delta beside a valid spec.md', async () => {
-    await write(changeDir, ['specs', 'user-auth', 'spec.md'], DELTA);
-    await write(changeDir, ['specs', 'user-auth', 'more.md'], DELTA);
+  it('names a stray delta beside a valid spec.feature', async () => {
+    await write(changeDir, ['specs', 'user-auth', 'spec.feature'], DELTA);
+    await write(changeDir, ['specs', 'user-auth', 'more.feature'], DELTA);
 
     const instructions = await generateApplyInstructions(tempDir, 'my-change');
 
     expect(instructions.warnings).toHaveLength(1);
-    expect(instructions.warnings?.[0]).toContain('specs/user-auth/more.md');
+    expect(instructions.warnings?.[0]).toContain('specs/user-auth/more.feature');
   });
 
-  it('control: stays quiet for specs/<capability>/spec.md', async () => {
-    await write(changeDir, ['specs', 'user-auth', 'spec.md'], DELTA);
+  it('control: stays quiet for specs/<capability>/spec.feature', async () => {
+    await write(changeDir, ['specs', 'user-auth', 'spec.feature'], DELTA);
 
     const instructions = await generateApplyInstructions(tempDir, 'my-change');
     const report = await new Validator().validateChangeDeltaSpecs(changeDir);
@@ -358,7 +390,7 @@ describe('instructions apply with an unread delta file', () => {
   });
 });
 
-describe('end to end: a delta written as specs/<capability>.md', () => {
+describe('end to end: a delta written as specs/<capability>.feature', () => {
   const temps: string[] = [];
   afterAll(async () => {
     await Promise.all(temps.map((dir) => fs.rm(dir, { recursive: true, force: true })));
@@ -391,21 +423,21 @@ describe('end to end: a delta written as specs/<capability>.md', () => {
     await write(dir, ['design.md'], '# Design\n\nSession cookies.\n');
     await write(dir, ['tasks.md'], '## 1. Work\n- [x] 1.1 Implement login\n');
     await write(dir, ['specs', ...deltaPath], DELTA);
-    const mainSpec = path.join(project, 'openspec', 'specs', 'user-auth', 'spec.md');
+    const mainSpec = path.join(project, 'openspec', 'specs', 'user-auth', 'spec.feature');
     return { cli, dir, mainSpec };
   }
 
   it('apply warns, validate rejects, and archive refuses instead of archiving it unmerged', async () => {
-    const c = await loginChange(['user-auth.md']);
+    const c = await loginChange(['user-auth.feature']);
 
     const apply = JSON.parse(
       (await c.cli(['instructions', 'apply', '--change', 'add-login', '--json'])).stdout
     );
-    expect(apply.warnings?.join('\n')).toContain('specs/user-auth/spec.md');
+    expect(apply.warnings?.join('\n')).toContain('specs/user-auth/spec.feature');
 
     const validated = await c.cli(['validate', 'add-login']);
     expect(validated.exitCode).not.toBe(0);
-    expect(validated.stdout + validated.stderr).toContain('specs/user-auth.md');
+    expect(validated.stdout + validated.stderr).toContain('specs/user-auth.feature');
 
     const archived = await c.cli(['archive', 'add-login', '--yes']);
     expect(archived.exitCode).not.toBe(0);
@@ -413,8 +445,8 @@ describe('end to end: a delta written as specs/<capability>.md', () => {
     expect(await exists(c.mainSpec)).toBe(false);
   }, T);
 
-  it('control: specs/<capability>/spec.md validates, archives, and merges', async () => {
-    const c = await loginChange(['user-auth', 'spec.md']);
+  it('control: specs/<capability>/spec.feature validates, archives, and merges', async () => {
+    const c = await loginChange(['user-auth', 'spec.feature']);
 
     const apply = JSON.parse(
       (await c.cli(['instructions', 'apply', '--change', 'add-login', '--json'])).stdout

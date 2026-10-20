@@ -18,7 +18,7 @@ import { FileSystemUtils } from '../utils/file-system.js';
 import { assertDiscoveredSpecFile } from '../utils/spec-path-containment.js';
 import { discoverSpecFiles, SPEC_FILE_NAME } from '../utils/spec-discovery.js';
 import { parseFeature, ruleSource } from '../core/gherkin/document.js';
-import { parseDeltaFeature } from '../core/gherkin/delta.js';
+import { parseDeltaFeature, stripOperationTags } from '../core/gherkin/delta.js';
 import { diffRequirementBlock } from '../utils/requirement-diff.js';
 
 /**
@@ -241,10 +241,15 @@ export class ChangeCommand {
         };
 
         // Archive matches by ID, so the diff does too: a renamed requirement
-        // is still the same rule.
+        // is still the same rule. The operation tag is left out, since archive
+        // drops it and it is not a change to the requirement.
         const match = main && rule.id ? main.rules.find((candidate) => candidate.id === rule.id) : undefined;
         if (main && match) {
-          entry.diff = diffRequirementBlock(ruleSource(main, match), raw, `${capability}/${label(rule)}`);
+          entry.diff = diffRequirementBlock(
+            ruleSource(main, match),
+            stripOperationTags(raw, rule),
+            `${capability}/${label(rule)}`
+          );
         } else if (!rule.id) {
           entry.warning = `Rule "${rule.name}" has no requirement ID, so it cannot be matched to the main spec`;
         } else if (mainContent) {
