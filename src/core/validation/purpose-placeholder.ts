@@ -140,8 +140,9 @@ export function findPurposePlaceholderIssue(
  * naming the first line then points at prose the reader can see is fine.
  *
  * The description runs from the line after `Feature:` to the first line that
- * starts a tag, a comment, a background, a scenario or a rule. Undefined when
- * the placeholder cannot be located; a wrong line number is worse than none.
+ * starts a tag, a comment, a background, a scenario or a rule. Fenced lines are
+ * quoted material, not the Purpose, so they are skipped. Undefined when the
+ * placeholder cannot be located; a wrong line number is worse than none.
  */
 function findPlaceholderLine(document: FeatureDocument, leading: boolean): number | undefined {
   const feature = document.feature;
@@ -150,13 +151,15 @@ function findPlaceholderLine(document: FeatureDocument, leading: boolean): numbe
   for (let i = feature.line; i < document.lines.length; i++) {
     const text = document.lines[i];
     if (/^\s*(@|#|Background:|Scenario|Example|Rule:)/.test(text)) break;
-    if (leading && text.trim()) return i + 1;
     descriptionLines.push({ line: i + 1, text: text.trim() });
   }
-  if (leading) return undefined;
-  const purpose = descriptionLines.map(({ text }) => text).join('\n');
+  // Fenced lines are skipped, for the reason detection skips them.
+  const fenced = buildCodeFenceMask(descriptionLines.map(({ text }) => text));
+  const unfenced = descriptionLines.filter((_, index) => !fenced[index]);
+  if (leading) return unfenced.find(({ text }) => text !== '')?.line;
+  const purpose = unfenced.map(({ text }) => text).join('\n');
   const prefixAt = generatedPlaceholderPrefixIndex(purpose);
   if (prefixAt === undefined) return undefined;
   const lineOffset = purpose.slice(0, prefixAt).split('\n').length - 1;
-  return descriptionLines[lineOffset]?.line;
+  return unfenced[lineOffset]?.line;
 }
