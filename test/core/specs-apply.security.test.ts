@@ -37,19 +37,20 @@ describe('spec apply path boundaries', () => {
   });
 
   async function writeDelta(id = 'widgets'): Promise<string> {
-    const deltaPath = path.join(changeSpecsDir, id, 'spec.md');
+    const deltaPath = path.join(changeSpecsDir, id, 'spec.feature');
     await fs.mkdir(path.dirname(deltaPath), { recursive: true });
     await fs.writeFile(
       deltaPath,
       [
-        '## ADDED Requirements',
+        'Feature: Widgets',
         '',
-        '### Requirement: Safe update',
-        'The system SHALL stay inside its planning root.',
+        '  @added @REQ-0001',
+        '  Rule: Safe update',
+        '    The system SHALL stay inside its planning root.',
         '',
-        '#### Scenario: Apply',
-        '- **WHEN** the change is archived',
-        '- **THEN** the spec is updated',
+        '    Scenario: Apply',
+        '      When the change is archived',
+        '      Then the spec is updated',
         '',
       ].join('\n')
     );
@@ -57,9 +58,9 @@ describe('spec apply path boundaries', () => {
   }
 
   itWithSymlinks('rejects a delta spec symlink that leaves the project', async () => {
-    const outsideSpec = path.join(outsideDir, 'spec.md');
+    const outsideSpec = path.join(outsideDir, 'spec.feature');
     await fs.writeFile(outsideSpec, 'outside sentinel');
-    const linkedSpec = path.join(changeSpecsDir, 'widgets', 'spec.md');
+    const linkedSpec = path.join(changeSpecsDir, 'widgets', 'spec.feature');
     await fs.mkdir(path.dirname(linkedSpec), { recursive: true });
     await fs.symlink(outsideSpec, linkedSpec);
 
@@ -79,28 +80,29 @@ describe('spec apply path boundaries', () => {
     const built = await buildUpdatedSpec(update, 'test-change', { silent: true });
     await writeUpdatedSpec(update, built.rebuilt, built.counts, { silent: true });
 
-    await expect(fs.readFile(path.join(sharedMainDir, 'spec.md'), 'utf-8')).resolves.toContain(
+    await expect(fs.readFile(path.join(sharedMainDir, 'spec.feature'), 'utf-8')).resolves.toContain(
       'Safe update'
     );
   });
 
   itWithSymlinks('supports a delta spec link elsewhere in the change specs root', async () => {
-    const sharedDelta = path.join(changeSpecsDir, 'shared-delta.md');
+    const sharedDelta = path.join(changeSpecsDir, 'shared-delta.feature');
     await fs.writeFile(
       sharedDelta,
       [
-        '## ADDED Requirements',
+        'Feature: Widgets',
         '',
-        '### Requirement: Shared safely',
-        'The system SHALL preserve confined spec links.',
+        '  @added @REQ-0001',
+        '  Rule: Shared safely',
+        '    The system SHALL preserve confined spec links.',
         '',
-        '#### Scenario: Apply',
-        '- **WHEN** the linked delta is archived',
-        '- **THEN** the spec is updated',
+        '    Scenario: Apply',
+        '      When the linked delta is archived',
+        '      Then the spec is updated',
         '',
       ].join('\n')
     );
-    const linkedDelta = path.join(changeSpecsDir, 'widgets', 'spec.md');
+    const linkedDelta = path.join(changeSpecsDir, 'widgets', 'spec.feature');
     await fs.mkdir(path.dirname(linkedDelta), { recursive: true });
     await fs.symlink(sharedDelta, linkedDelta);
 
@@ -113,7 +115,7 @@ describe('spec apply path boundaries', () => {
   itWithSymlinks('rechecks the delta source immediately before reading it', async () => {
     const deltaPath = await writeDelta();
     const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
-    const outsideSpec = path.join(outsideDir, 'spec.md');
+    const outsideSpec = path.join(outsideDir, 'spec.feature');
     await fs.writeFile(outsideSpec, 'outside sentinel');
     await fs.rm(deltaPath);
     await fs.symlink(outsideSpec, deltaPath);
@@ -125,11 +127,11 @@ describe('spec apply path boundaries', () => {
 
   itWithSymlinks('rechecks the existing target immediately before reading it', async () => {
     await writeDelta();
-    const targetPath = path.join(mainSpecsDir, 'widgets', 'spec.md');
+    const targetPath = path.join(mainSpecsDir, 'widgets', 'spec.feature');
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.writeFile(targetPath, 'initial main spec');
     const [update] = await findSpecUpdates(changeDir, mainSpecsDir);
-    const outsideSpec = path.join(outsideDir, 'spec.md');
+    const outsideSpec = path.join(outsideDir, 'spec.feature');
     await fs.writeFile(outsideSpec, 'outside sentinel');
     await fs.rm(targetPath);
     await fs.symlink(outsideSpec, targetPath);
@@ -151,7 +153,7 @@ describe('spec apply path boundaries', () => {
     await expect(
       writeUpdatedSpec(
         update,
-        '# widgets Specification\n\n## Purpose\nSafe.\n\n## Requirements\n',
+        'Feature: Widgets\n  Safe.\n',
         { added: 1, modified: 0, removed: 0, renamed: 0 },
         { silent: true }
       )

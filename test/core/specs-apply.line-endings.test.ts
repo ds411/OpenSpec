@@ -16,35 +16,23 @@ import {
  */
 
 const ORIGINAL_REQUIREMENT = [
-  '### Requirement: Existing behavior',
-  'The project SHALL expose the original behavior.',
+  '  @REQ-0001',
+  '  Rule: Existing behavior',
+  '    The project SHALL expose the original behavior.',
   '',
-  '#### Scenario: Existing path',
-  '- **WHEN** the behavior is exercised',
-  '- **THEN** it SHALL remain available',
+  '    Scenario: Existing path',
+  '      When the behavior is exercised',
+  '      Then it SHALL remain available',
 ].join('\n');
 
-const UPDATED_REQUIREMENT = [
-  '### Requirement: Existing behavior',
-  'The project SHALL expose the updated behavior.',
-  '',
-  '#### Scenario: Existing path',
-  '- **WHEN** the behavior is exercised',
-  '- **THEN** it SHALL remain available',
-].join('\n');
+const UPDATED_REQUIREMENT = ORIGINAL_REQUIREMENT.replace('  @REQ-0001', '  @modified @REQ-0001').replace(
+  'original behavior',
+  'updated behavior'
+);
 
-const BASE_SPEC = [
-  '# demo Specification',
-  '',
-  '## Purpose',
-  'Demonstrates line-ending preservation.',
-  '',
-  '## Requirements',
-  ORIGINAL_REQUIREMENT,
-  '',
-].join('\n');
+const BASE_SPEC = ['Feature: Demo', '  Demonstrates line-ending preservation.', '', ORIGINAL_REQUIREMENT, ''].join('\n');
 
-const DELTA_SPEC = ['## MODIFIED Requirements', '', UPDATED_REQUIREMENT, ''].join('\n');
+const DELTA_SPEC = ['Feature: Demo', '', UPDATED_REQUIREMENT, ''].join('\n');
 
 function countEndings(content: string): { crlf: number; loneLf: number } {
   const crlf = content.match(/\r\n/g)?.length ?? 0;
@@ -63,8 +51,8 @@ describe('spec line-ending preservation', () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-spec-eol-'));
     changeDir = path.join(tempDir, 'openspec', 'changes', 'eol-test');
     mainSpecsDir = path.join(tempDir, 'openspec', 'specs');
-    source = path.join(changeDir, 'specs', 'demo', 'spec.md');
-    target = path.join(mainSpecsDir, 'demo', 'spec.md');
+    source = path.join(changeDir, 'specs', 'demo', 'spec.feature');
+    target = path.join(mainSpecsDir, 'demo', 'spec.feature');
     await fs.mkdir(path.dirname(source), { recursive: true });
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(source, DELTA_SPEC);
@@ -101,10 +89,10 @@ describe('spec line-ending preservation', () => {
 
   it('writes a brand-new spec with LF', async () => {
     // No existing target to take a convention from; LF is the portable default.
-    // A new spec only accepts ADDED requirements.
+    // A new spec only accepts @added requirements.
     await fs.writeFile(
       source,
-      ['## ADDED Requirements', '', ORIGINAL_REQUIREMENT, ''].join('\n')
+      ['Feature: Demo', '', ORIGINAL_REQUIREMENT.replace('  @REQ-0001', '  @added @REQ-0001'), ''].join('\n')
     );
     await fs.rm(target, { force: true });
 
@@ -117,7 +105,7 @@ describe('spec line-ending preservation', () => {
   });
 
   it('normalizes a mixed-ending spec to its dominant ending', async () => {
-    const mixed = BASE_SPEC.replaceAll('\n', '\r\n').replace('## Purpose\r\n', '## Purpose\n');
+    const mixed = BASE_SPEC.replaceAll('\n', '\r\n').replace('Feature: Demo\r\n', 'Feature: Demo\n');
     const written = await applyTo(mixed);
 
     // CRLF dominates the input, so the output should settle on CRLF throughout
