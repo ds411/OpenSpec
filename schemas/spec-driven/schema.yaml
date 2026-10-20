@@ -137,8 +137,8 @@ artifacts:
       Purpose after archive` placeholder to fill in by hand. Leave the feature
       description empty in a delta for an existing capability - that spec
       already has a Purpose and the delta's is ignored. To change an existing
-      capability's Purpose - including a leftover `TBD` placeholder - edit
-      `<planningHome.root>/openspec/specs/<capability-path>/spec.feature`
+      capability's Purpose - including a leftover `TBD` placeholder -
+      edit `<planningHome.root>/openspec/specs/<capability-path>/spec.feature`
       directly. `planningHome.root` comes from the `openspec instructions ...
       --json` response. Always use it rather than a repo-relative path: it
       resolves to the store whenever the change lives in one - whether that
@@ -147,7 +147,7 @@ artifacts:
       which case applies; the field already has.
 
       Modified requirements workflow:
-      1. Find the requirement in `<planningHome.root>/openspec/specs/<capability-path>/spec.feature` (the same store-aware root as above). `openspec show "<spec-id>" --type spec --json` lists each requirement with its ID.
+      1. Locate the requirement in `<planningHome.root>/openspec/specs/<capability-path>/spec.feature` (the same store-aware root as above). `openspec show "<spec-id>" --type spec --json` lists each requirement with its ID.
       2. Copy the ENTIRE rule: its tag line, the `Rule:` line, the statement and all scenarios.
       3. Paste it into the delta, add `@modified` to the tag line, and edit it to reflect the new behavior. Do not change the ID.
 

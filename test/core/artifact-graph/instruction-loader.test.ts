@@ -41,29 +41,33 @@ describe('instruction-loader', () => {
 
       expect(template).toContain('## Why');
       expect(template).toContain('## What Changes');
-      expect(template).toContain('specs/<capability-path>/spec.md');
+      expect(template).toContain('specs/<capability-path>/spec.feature');
       expect(template).toContain('<existing-capability-path>');
       expect(template).toContain('exact existing path under openspec/specs/');
     });
 
     // Artifacts inherit the template's opening line, so every packaged template
-    // starts the document with an `# ` title instead of a section header.
-    // Without it every generated proposal.md, design.md, spec.md and tasks.md
-    // trips markdownlint MD041 (#1138).
+    // starts the document with a title instead of a section header. Without it
+    // every generated proposal.md, design.md and tasks.md trips markdownlint
+    // MD041 (#1138). A spec is a feature file: its title is the `Feature:` line.
     it.each(packagedArtifacts())(
       'opens the %s schema\'s %s template with a title',
       (schemaName, _artifactId, templateName) => {
         const [firstLine, secondLine] = openingLines(loadTemplate(schemaName, templateName));
 
-        expect(firstLine).toMatch(/^# \S/);
-        expect(secondLine).toBe('');
+        if (templateName.endsWith('.feature')) {
+          expect(firstLine).toMatch(/^Feature: \S/);
+        } else {
+          expect(firstLine).toMatch(/^# \S/);
+          expect(secondLine).toBe('');
+        }
       }
     );
 
     describe('spec-driven titles', () => {
       const TITLES: Record<string, string> = {
         proposal: '# Proposal',
-        specs: '# Spec Delta',
+        specs: 'Feature: <!-- capability name -->',
         design: '# Design',
         tasks: '# Tasks',
       };
@@ -744,7 +748,7 @@ rules:
       expect(proposal?.outputPath).toBe('proposal.md');
 
       const specs = status.artifacts.find(a => a.id === 'specs');
-      expect(specs?.outputPath).toBe('specs/**/*.md');
+      expect(specs?.outputPath).toBe('specs/**/*.feature');
     });
 
     it('should report planning completion without removing the compatibility alias', () => {
@@ -754,7 +758,7 @@ rules:
 
       // Create all required files for spec-driven schema
       fs.writeFileSync(path.join(changeDir, 'proposal.md'), '# Proposal');
-      fs.writeFileSync(path.join(changeDir, 'specs', 'test.md'), '# Spec');
+      fs.writeFileSync(path.join(changeDir, 'specs', 'test.feature'), 'Feature: Spec');
       fs.writeFileSync(path.join(changeDir, 'design.md'), '# Design');
       fs.writeFileSync(path.join(changeDir, 'tasks.md'), '# Tasks');
 

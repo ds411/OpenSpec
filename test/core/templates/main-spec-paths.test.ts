@@ -8,7 +8,7 @@ import { loadSchema } from '../../../src/core/artifact-graph/schema.js';
 import { resolveCurrentPlanningHomeSync } from '../../../src/core/planning-home.js';
 
 // #1702: the `specs` instruction sent main-spec reads and edits to
-// `openspec/specs/<capability-path>/spec.md`, a cwd-relative path. When the
+// `openspec/specs/<capability-path>/spec.feature`, a cwd-relative path. When the
 // change lives in a registered store the main spec is under the store root, so
 // the read either misses or - when a local capability shares the name - lands
 // on a different capability and the MODIFIED workflow copies the wrong
@@ -36,7 +36,7 @@ function instructionFor(artifactId: string): string {
 function mainSpecOperations(instruction: string): string[] {
   return instruction
     .split('\n')
-    .filter(line => /openspec\/specs\/<capability-path>\/spec\.md/.test(line))
+    .filter(line => /openspec\/specs\/<capability-path>\/spec\.feature/.test(line))
     .filter(line => /\b(edit|Locate)\b/.test(line));
 }
 
@@ -84,13 +84,13 @@ describe('main spec paths in the specs instruction (#1702)', () => {
       const specDir = path.join(tempDir, 'openspec', 'specs', ...capability.split('/'));
       fs.mkdirSync(specDir, { recursive: true });
       fs.mkdirSync(path.join(tempDir, 'openspec', 'changes'), { recursive: true });
-      fs.writeFileSync(path.join(specDir, 'spec.md'), '# spec\n');
+      fs.writeFileSync(path.join(specDir, 'spec.feature'), 'Feature: spec\n');
 
       const planningHome = resolveCurrentPlanningHomeSync({ startPath: tempDir });
       expect(planningHome.root, 'planningHome has no root field').toBeTypeOf('string');
 
       const [operation] = mainSpecOperations(instructionFor('specs'));
-      const suffix = operation.match(/<planningHome\.root>\/(\S*?spec\.md)/)?.[1];
+      const suffix = operation.match(/<planningHome\.root>\/(\S*?spec\.feature)/)?.[1];
       expect(suffix, `no main-spec path found in: ${operation.trim()}`).toBeDefined();
 
       // Join as path segments rather than substituting into the string. The
