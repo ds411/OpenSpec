@@ -153,7 +153,12 @@ async function indexChange(changesDir: string, change: string, index: Requiremen
     for (const [operation, entries] of buckets) {
       for (const { rule } of entries) {
         if (!rule.id) {
-          index.problems.push(missingIdProblem(rule, spec.specFile, change));
+          // Only a new rule waits for "ids assign". A @modified or @removed
+          // rule must copy the ID it acts on; validate reports it when it
+          // does not, and the trace check has nothing to add.
+          if (operation === 'added') {
+            index.problems.push(missingIdProblem(rule, spec.specFile, change));
+          }
           continue;
         }
         index.changes.push({

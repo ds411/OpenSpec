@@ -110,6 +110,40 @@ describe('loadRequirementIndex', () => {
     expect(index.changes[0]).toMatchObject({ file: delta, line: 4, notrace: false });
   });
 
+  it('reports an added rule with no ID, but not a modified or removed one', async () => {
+    const delta = write(
+      'openspec/changes/c/specs/list/spec.feature',
+      [
+        'Feature: List command',
+        '',
+        '  @added',
+        '  Rule: New rule',
+        '    The command SHALL do more.',
+        '',
+        '    Scenario: More',
+        '      Then it does more',
+        '',
+        '  @modified',
+        '  Rule: Changed rule',
+        '    The command SHALL do it again.',
+        '',
+        '    Scenario: Again',
+        '      Then it does it again',
+        '',
+        '  @removed',
+        '  Rule: Old rule',
+        '    Reason: Gone.',
+        '',
+      ].join('\n')
+    );
+
+    const index = await load();
+    expect(index.changes).toEqual([]);
+    expect(index.problems).toEqual([
+      expect.objectContaining({ code: 'requirement_without_id', file: delta, line: 4, change: 'c' }),
+    ]);
+  });
+
   it('reports a duplicate ID once and keeps the first requirement', async () => {
     const rule = (name: string) =>
       `Feature: ${name}\n\n  @REQ-0001\n  Rule: ${name}\n    It SHALL work.\n\n    Scenario: Works\n      Then it works\n`;
