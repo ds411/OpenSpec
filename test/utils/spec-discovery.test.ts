@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import path from 'path';
 import { promises as fs } from 'fs';
 import os from 'os';
-import { discoverSpecFiles } from '../../src/utils/spec-discovery.js';
+import { discoverLegacySpecFiles, discoverSpecFiles } from '../../src/utils/spec-discovery.js';
 
 async function withTempDir(run: (dir: string) => Promise<void>) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-spec-discovery-'));
@@ -212,5 +212,27 @@ describe('discoverSpecFiles', () => {
       const found = await discoverSpecFiles(dir);
       expect(found.map((s) => s.id)).toEqual(['real']);
     });
+  });
+});
+
+describe('discoverLegacySpecFiles', () => {
+  it('finds markdown main specs that have no spec.feature beside them', async () => {
+    await withTempDir(async (dir) => {
+      await writeSpec(dir, 'auth');
+      await fs.writeFile(path.join(dir, 'auth', 'spec.md'), '# Auth\n', 'utf8');
+      await fs.mkdir(path.join(dir, 'billing', 'invoices'), { recursive: true });
+      await fs.writeFile(path.join(dir, 'billing', 'invoices', 'spec.md'), '# Invoices\n', 'utf8');
+      await fs.mkdir(path.join(dir, 'notes'), { recursive: true });
+      await fs.writeFile(path.join(dir, 'notes', 'readme.md'), '# Notes\n', 'utf8');
+
+      const found = await discoverLegacySpecFiles(dir);
+      expect(found).toEqual([
+        { id: 'billing/invoices', specFile: path.join(dir, 'billing', 'invoices', 'spec.md') },
+      ]);
+    });
+  });
+
+  it('returns an empty list when the specs root does not exist', async () => {
+    expect(await discoverLegacySpecFiles(path.join(os.tmpdir(), 'openspec-no-such-specs-root'))).toEqual([]);
   });
 });

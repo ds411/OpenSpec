@@ -6,6 +6,9 @@ import { parseDeltaSpec } from '../core/parsers/requirement-blocks.js';
 /** The file that holds a capability's spec, in main specs and in change deltas. */
 export const SPEC_FILE_NAME = 'spec.feature';
 
+/** The markdown spec file of earlier versions, which `openspec convert-specs` replaces. */
+export const LEGACY_SPEC_FILE_NAME = 'spec.md';
+
 export interface DiscoveredSpec {
   /** Spec id relative to the specs root, forward-slash separated on every platform (e.g. "web" or "platform/session-layout"). */
   id: string;
@@ -29,7 +32,10 @@ export interface DiscoveredSpec {
  * archive/apply merge path, silently dropping an unreadable capability would
  * recreate the exact data-loss class #1353 is closing.
  */
-export async function discoverSpecFiles(specsRoot: string): Promise<DiscoveredSpec[]> {
+export async function discoverSpecFiles(
+  specsRoot: string,
+  fileName: string = SPEC_FILE_NAME
+): Promise<DiscoveredSpec[]> {
   const results: DiscoveredSpec[] = [];
   const walk = async (dir: string, segments: string[]): Promise<void> => {
     let entries;
@@ -43,7 +49,7 @@ export async function discoverSpecFiles(specsRoot: string): Promise<DiscoveredSp
       if (entry.name.startsWith('.')) continue;
       if (entry.isDirectory()) {
         await walk(path.join(dir, entry.name), [...segments, entry.name]);
-      } else if (entry.name === SPEC_FILE_NAME && segments.length > 0) {
+      } else if (entry.name === fileName && segments.length > 0) {
         const specFile = path.join(dir, entry.name);
         if (entry.isFile()) {
           assertDiscoveredSpecFile(specsRoot, specFile);
@@ -67,6 +73,32 @@ export async function discoverSpecFiles(specsRoot: string): Promise<DiscoveredSp
   // process's ICU locale, so ordering could vary by OS/CI. Code-point ordering
   // guarantees the deterministic output the docstring promises.
   return results.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * Main specs still in the old markdown format: a capability folder with a
+ * `spec.md` and no `spec.feature`. Nothing reads them any more, so list,
+ * validate and archive report them instead of acting as if the capability had
+ * no spec. Same walk and order as discoverSpecFiles.
+ */
+export async function discoverLegacySpecFiles(specsRoot: string): Promise<DiscoveredSpec[]> {
+  const [legacy, current] = await Promise.all([
+    discoverSpecFiles(specsRoot, LEGACY_SPEC_FILE_NAME),
+    discoverSpecFiles(specsRoot),
+  ]);
+  const converted = new Set(current.map((spec) => spec.id));
+  return legacy.filter((spec) => !converted.has(spec.id));
+}
+
+/** Text shared by every report of a spec file still in the old markdown format. */
+export const LEGACY_SPEC_ISSUE_MARKER = 'in the old markdown format';
+
+/** The message for a main spec still in the old markdown format. */
+export function legacySpecMessage(id: string): string {
+  return (
+    `Spec found at specs/${id}/${LEGACY_SPEC_FILE_NAME} ${LEGACY_SPEC_ISSUE_MARKER}. Specs are Gherkin feature files now: ` +
+    `run "openspec convert-specs" to convert it into specs/${id}/${SPEC_FILE_NAME}.`
+  );
 }
 
 export interface UnreadDeltaFile {

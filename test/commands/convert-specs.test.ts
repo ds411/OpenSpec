@@ -62,6 +62,44 @@ describe('openspec convert-specs', () => {
     await expect(fs.access(path.join(root, 'openspec', 'specs', 'alpha', 'spec.feature'))).rejects.toThrow();
   });
 
+  it('is named by list, validate and archive until it is converted', async () => {
+    const list = await runCLI(['list', '--specs', '--json'], { cwd: root });
+    expect(list.exitCode).toBe(0);
+    expect(JSON.parse(list.stdout)).toMatchObject({
+      specs: [],
+      warnings: [{ code: 'legacy_markdown_spec', name: 'alpha' }],
+    });
+
+    const validate = await runCLI(['validate', 'alpha', '--no-interactive'], { cwd: root });
+    expect(validate.exitCode).toBe(1);
+    expect(validate.stderr).toContain('Spec found at specs/alpha/spec.md in the old markdown format');
+    expect(validate.stderr).toContain('Convert markdown specs to Gherkin feature files: openspec convert-specs');
+
+    const bulk = await runCLI(['validate', '--specs', '--json', '--no-interactive'], { cwd: root });
+    expect(bulk.exitCode).toBe(1);
+    expect(JSON.parse(bulk.stdout).items).toEqual([
+      expect.objectContaining({ id: 'alpha', type: 'spec', valid: false }),
+    ]);
+
+    // A delta against the unconverted capability must not write a second
+    // spec next to the markdown one.
+    const changeDir = path.join(root, 'openspec', 'changes', 'touch-alpha');
+    await fs.mkdir(path.join(changeDir, 'specs', 'alpha'), { recursive: true });
+    await fs.writeFile(path.join(changeDir, '.openspec.yaml'), 'schema: spec-driven\n');
+    await fs.writeFile(
+      path.join(changeDir, 'specs', 'alpha', 'spec.feature'),
+      'Feature: Alpha\n\n  @added @REQ-0009\n  Rule: Alpha input\n    The system SHALL read alpha input.\n\n' +
+        '    Scenario: Alpha reads\n      When alpha starts\n      Then it reads input\n'
+    );
+    const archive = await runCLI(['archive', 'touch-alpha', '--yes'], { cwd: root });
+    expect(archive.exitCode).toBe(1);
+    expect(`${archive.stdout}${archive.stderr}`).toContain(
+      'the main spec is specs/alpha/spec.md, in the old markdown format. Run "openspec convert-specs"'
+    );
+    await expect(fs.access(path.join(root, 'openspec', 'specs', 'alpha', 'spec.feature'))).rejects.toThrow();
+    await expect(fs.access(changeDir)).resolves.toBeUndefined();
+  });
+
   it('says so when there is nothing to convert', async () => {
     await runCLI(['convert-specs'], { cwd: root });
     const again = await runCLI(['convert-specs'], { cwd: root });

@@ -24,10 +24,9 @@ import {
 import { parseFeature, ruleSource, type FeatureDocument, type SpecRule } from './gherkin/document.js';
 import { formatRequirementId, isRequirementId } from './gherkin/ids.js';
 import { withNextIdNumber } from './gherkin/id-store.js';
-import { SPEC_FILE_NAME } from '../utils/spec-discovery.js';
+import { LEGACY_SPEC_FILE_NAME, SPEC_FILE_NAME } from '../utils/spec-discovery.js';
 import { matchLineEnding } from '../utils/line-endings.js';
 
-export const LEGACY_SPEC_FILE_NAME = 'spec.md';
 
 export interface ConvertSpecsOptions {
   dryRun?: boolean;

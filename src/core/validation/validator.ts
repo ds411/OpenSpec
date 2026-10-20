@@ -27,6 +27,7 @@ import {
   discoverSpecFiles,
   findUnreadDeltaFiles,
   hasAnyFileUnder,
+  LEGACY_SPEC_ISSUE_MARKER,
   SPEC_FILE_NAME,
 } from '../../utils/spec-discovery.js';
 import {
@@ -281,7 +282,7 @@ export class Validator {
         level: 'ERROR',
         path: file.path,
         message: file.legacyMarkdown
-          ? `Delta spec found at specs/${file.path} in the old markdown format. Specs are Gherkin feature files now: run "openspec convert-specs" to convert it into specs/${file.expected}.`
+          ? `Delta spec found at specs/${file.path} ${LEGACY_SPEC_ISSUE_MARKER}. Specs are Gherkin feature files now: run "openspec convert-specs" to convert it into specs/${file.expected}.`
           : `Delta spec found at specs/${file.path}. Delta specs must be a ${SPEC_FILE_NAME} inside a capability folder — this file is ignored when the change is applied or archived. Move its rules into specs/${file.expected}.`,
       });
     }

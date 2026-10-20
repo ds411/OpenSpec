@@ -13,7 +13,12 @@ import { parseFeature } from './gherkin/document.js';
 import { parseDeltaFeature } from './gherkin/delta.js';
 import { buildSpecSkeleton as buildFeatureSkeleton, mergeDelta } from './gherkin/merge.js';
 import { MIN_PURPOSE_LENGTH } from './validation/constants.js';
-import { discoverSpecFiles, SPEC_FILE_NAME } from '../utils/spec-discovery.js';
+import {
+  discoverSpecFiles,
+  LEGACY_SPEC_FILE_NAME,
+  LEGACY_SPEC_ISSUE_MARKER,
+  SPEC_FILE_NAME,
+} from '../utils/spec-discovery.js';
 import { FileSystemUtils } from '../utils/file-system.js';
 import { assertSpecFileWithin } from '../utils/spec-path-containment.js';
 import { matchLineEnding } from '../utils/line-endings.js';
@@ -145,6 +150,14 @@ export async function findSpecUpdates(changeDir: string, mainSpecsDir: string): 
   return updates;
 }
 
+async function isFile(file: string): Promise<boolean> {
+  try {
+    return (await fs.stat(file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Build an updated spec by applying a change's Gherkin delta to the main spec.
  * Returns the rebuilt content and counts of operations. Throws when the delta
@@ -185,6 +198,14 @@ export async function buildUpdatedSpec(
     const code = (error as NodeJS.ErrnoException)?.code;
     if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
     mainContent = undefined;
+  }
+  // A markdown main spec is not read any more. Treating the capability as new
+  // would write a second spec next to it, so the change waits for conversion.
+  if (mainContent === undefined && (await isFile(path.join(path.dirname(update.target), LEGACY_SPEC_FILE_NAME)))) {
+    throw new Error(
+      `${update.id}: the main spec is specs/${update.id}/${LEGACY_SPEC_FILE_NAME}, ${LEGACY_SPEC_ISSUE_MARKER}. ` +
+        'Run "openspec convert-specs" to convert it, then archive again.'
+    );
   }
 
   const result = mergeDelta({ specName: update.id, changeName, plan, mainContent });
