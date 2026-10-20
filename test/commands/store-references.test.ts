@@ -27,7 +27,7 @@ describe('store references in instructions (3.1)', () => {
 
     storeRoot = path.join(tempDir, 'team-context');
     createOpenSpecRoot(storeRoot);
-    writeSpec(storeRoot, 'billing', '## Purpose\n\nUsage-based invoicing.\n\n## Requirements\n\n- r\n');
+    writeSpec(storeRoot, 'billing', 'Feature: Billing\n  Usage-based invoicing.\n\n  @REQ-0001\n  Rule: R\n    The system SHALL r.\n');
     await registerStore({ id: 'team-context', localPath: storeRoot, globalDataDir });
 
     appRepo = path.join(tempDir, 'app-repo');
@@ -70,7 +70,7 @@ describe('store references in instructions (3.1)', () => {
       },
     ]);
     // Index, not inline: the spec body never appears in the output.
-    expect(artifactJson.stdout).not.toContain('## Requirements');
+    expect(artifactJson.stdout).not.toContain('Rule: R');
 
     const artifactHuman = await runCLI(
       ['instructions', 'proposal', '--change', 'billing-rework'],
@@ -95,7 +95,7 @@ describe('store references in instructions (3.1)', () => {
   it('reflects live store edits on every run - nothing is frozen', async () => {
     await createChange(appRepo, 'billing-rework');
 
-    writeSpec(storeRoot, 'billing', '## Purpose\n\nRewritten upstream truth.\n');
+    writeSpec(storeRoot, 'billing', 'Feature: Billing\n  Rewritten upstream truth.\n');
     const result = await runCLI(
       ['instructions', 'proposal', '--change', 'billing-rework', '--json'],
       { cwd: appRepo, env }
@@ -139,7 +139,7 @@ describe('store references in instructions (3.1)', () => {
     // different one. With --store, the index must be the store's.
     const upstreamRoot = path.join(tempDir, 'upstream-context');
     createOpenSpecRoot(upstreamRoot);
-    writeSpec(upstreamRoot, 'platform-rules', '## Purpose\n\nPlatform rules.\n');
+    writeSpec(upstreamRoot, 'platform-rules', 'Feature: Platform rules\n  Platform rules.\n');
     await registerStore({ id: 'upstream-context', localPath: upstreamRoot, globalDataDir });
     fs.writeFileSync(
       path.join(storeRoot, 'openspec', 'config.yaml'),
@@ -246,8 +246,8 @@ describe('store references in instructions (3.1)', () => {
     const deltaDir = path.join(changeDir, 'specs', 'invoicing');
     fs.mkdirSync(deltaDir, { recursive: true });
     fs.writeFileSync(
-      path.join(deltaDir, 'spec.md'),
-      '## ADDED Requirements\n\n### Requirement: Invoicing SHALL follow team-context/billing\nThe system SHALL invoice per the upstream requirement (team-context/billing).\n\n#### Scenario: Invoices\n- **WHEN** a period ends\n- **THEN** an invoice is created\n'
+      path.join(deltaDir, 'spec.feature'),
+      'Feature: Invoicing\n\n  @added @REQ-0001\n  Rule: Invoicing SHALL follow team-context/billing\n    The system SHALL invoice per the upstream requirement (team-context/billing).\n\n    Scenario: Invoices\n      When a period ends\n      Then an invoice is created\n'
     );
 
     const storeBefore = snapshot(storeRoot);

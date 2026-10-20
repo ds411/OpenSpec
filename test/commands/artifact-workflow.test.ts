@@ -61,10 +61,11 @@ describe('artifact-workflow CLI commands', () => {
     }
 
     if (artifacts.includes('specs')) {
-      // specs artifact uses glob pattern "specs/*.md" - files directly in specs/ directory
+      // specs artifact uses glob pattern "specs/**/*.feature", which also
+      // matches files directly in the specs/ directory
       const specsDir = path.join(changeDir, 'specs');
       await fs.mkdir(specsDir, { recursive: true });
-      await fs.writeFile(path.join(specsDir, 'test-spec.md'), '## Purpose\nTest spec.');
+      await fs.writeFile(path.join(specsDir, 'test-spec.feature'), 'Feature: Test spec\n  Test spec.\n');
     }
 
     if (artifacts.includes('tasks')) {
@@ -794,7 +795,7 @@ apply:
 
     it('does not mark spec-producing schemas that use Windows separators', async () => {
       const schemaName = 'windows-specs';
-      const generates = String.raw`specs\**\*.md`;
+      const generates = String.raw`specs\**\*.feature`;
       const schemaDir = path.join(tempDir, 'openspec', 'schemas', schemaName);
       await fs.mkdir(path.join(schemaDir, 'templates'), { recursive: true });
       await fs.writeFile(
@@ -805,11 +806,11 @@ artifacts:
   - id: specs
     generates: '${generates}'
     description: Specs
-    template: spec.md
+    template: spec.feature
     requires: []
 `
       );
-      await fs.writeFile(path.join(schemaDir, 'templates', 'spec.md'), '# Spec\n');
+      await fs.writeFile(path.join(schemaDir, 'templates', 'spec.feature'), 'Feature: Spec\n');
       await fs.writeFile(
         path.join(tempDir, 'openspec', 'config.yaml'),
         `schema: ${schemaName}\n`
@@ -826,14 +827,16 @@ artifacts:
       const specDir = path.join(changeDir, 'specs', 'example');
       await fs.mkdir(specDir, { recursive: true });
       await fs.writeFile(
-        path.join(specDir, 'spec.md'),
-        `## ADDED Requirements
-### Requirement: Example behavior
-The system SHALL support the example behavior.
+        path.join(specDir, 'spec.feature'),
+        `Feature: Example
 
-#### Scenario: Example succeeds
-- **WHEN** the example runs
-- **THEN** it succeeds
+  @added @REQ-0001
+  Rule: Example behavior
+    The system SHALL support the example behavior.
+
+    Scenario: Example succeeds
+      When the example runs
+      Then it succeeds
 `
       );
 
@@ -976,7 +979,7 @@ operations:
 
       const json = JSON.parse(result.stdout);
       const expectedProposalPath = canonical(path.join(changesDir, 'json-apply', 'proposal.md'));
-      const expectedSpecPath = canonical(path.join(changesDir, 'json-apply', 'specs', 'test-spec.md'));
+      const expectedSpecPath = canonical(path.join(changesDir, 'json-apply', 'specs', 'test-spec.feature'));
       expect(json.changeName).toBe('json-apply');
       expect(json.schemaName).toBe('spec-driven');
       expect(json.state).toBe('ready');
@@ -1550,7 +1553,7 @@ operations:
         operationGuidance: ['Second archive guidance'],
       });
       expect(await fs.readFile(proposalPath, 'utf-8')).toBe(proposalBefore);
-      expect(await fs.readdir(path.join(changeDir, 'specs'))).toEqual(['test-spec.md']);
+      expect(await fs.readdir(path.join(changeDir, 'specs'))).toEqual(['test-spec.feature']);
       expect(
         await fs.readdir(path.join(tempDir, 'openspec', 'changes'))
       ).toContain('archive-read-only');

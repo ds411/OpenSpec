@@ -133,8 +133,8 @@ describe('ordered and plus tasks through the CLI', () => {
       '# Add thing\n\n## Why\nWe need billing documented so operators and customers share one contract for invoices.\n\n## What Changes\n- **billing**: adds a requirement\n'
     );
     await fs.writeFile(
-      path.join(changeDir, 'specs', 'billing', 'spec.md'),
-      '## ADDED Requirements\n### Requirement: Invoice Generation\nThe system SHALL generate an invoice for every completed billing period.\n\n#### Scenario: Period closes\n- **WHEN** a billing period closes\n- **THEN** an invoice is generated\n'
+      path.join(changeDir, 'specs', 'billing', 'spec.feature'),
+      'Feature: Billing\n\n  @added @REQ-0001\n  Rule: Invoice Generation\n    The system SHALL generate an invoice for every completed billing period.\n\n    Scenario: Period closes\n      When a billing period closes\n      Then an invoice is generated\n'
     );
     await fs.writeFile(path.join(changeDir, 'tasks.md'), tasks);
     return { cli };

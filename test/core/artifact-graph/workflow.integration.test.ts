@@ -92,7 +92,7 @@ describe('artifact-graph workflow integration', () => {
       // 5. Create specs directory with a spec file - tasks becomes ready
       const specsDir = path.join(tempDir, 'specs');
       fs.mkdirSync(specsDir, { recursive: true });
-      fs.writeFileSync(path.join(specsDir, 'feature-auth.md'), '# Auth Spec\n\nAuthentication specification.');
+      fs.writeFileSync(path.join(specsDir, 'feature-auth.feature'), 'Feature: Auth\n  Authentication specification.\n');
       completed = detectCompleted(graph, tempDir);
       expect(completed).toEqual(new Set(['proposal', 'design', 'specs']));
       expect(graph.getNextArtifacts(completed)).toEqual(['tasks']);
@@ -138,9 +138,9 @@ describe('artifact-graph workflow integration', () => {
       // Create specs directory with multiple files
       const specsDir = path.join(tempDir, 'specs');
       fs.mkdirSync(specsDir, { recursive: true });
-      fs.writeFileSync(path.join(specsDir, 'auth.md'), '# Auth');
-      fs.writeFileSync(path.join(specsDir, 'api.md'), '# API');
-      fs.writeFileSync(path.join(specsDir, 'database.md'), '# Database');
+      fs.writeFileSync(path.join(specsDir, 'auth.feature'), 'Feature: Auth\n');
+      fs.writeFileSync(path.join(specsDir, 'api.feature'), 'Feature: API\n');
+      fs.writeFileSync(path.join(specsDir, 'database.feature'), 'Feature: Database\n');
 
       const completed = detectCompleted(graph, tempDir);
       expect(completed.has('specs')).toBe(true);
@@ -199,7 +199,8 @@ describe('artifact-graph workflow integration', () => {
       // Create specs directory with wrong file types
       const specsDir = path.join(tempDir, 'specs');
       fs.mkdirSync(specsDir, { recursive: true });
-      fs.writeFileSync(path.join(specsDir, 'notes.txt'), 'not a markdown file');
+      fs.writeFileSync(path.join(specsDir, 'notes.txt'), 'not a feature file');
+      fs.writeFileSync(path.join(specsDir, 'old.md'), '# A markdown spec is not a feature file');
       fs.writeFileSync(path.join(specsDir, 'data.json'), '{}');
 
       const completed = detectCompleted(graph, tempDir);
