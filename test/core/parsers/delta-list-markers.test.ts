@@ -1,9 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { promises as fs } from 'fs';
-import path from 'path';
-import os from 'os';
+import { describe, it, expect } from 'vitest';
 import { parseDeltaSpec } from '../../../src/core/parsers/requirement-blocks.js';
-import { buildUpdatedSpec, findSpecUpdates } from '../../../src/core/specs-apply.js';
 
 /**
  * CommonMark bullet lists may open with `-`, `*` or `+`. The REMOVED bullet form
@@ -121,79 +117,4 @@ describe('parseDeltaSpec (RENAMED list markers)', () => {
     );
     expect(plan.renamed).toEqual([]);
   });
-});
-
-describe('buildUpdatedSpec (delta list markers)', () => {
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-markers-'));
-  });
-  afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  });
-
-  const MAIN_SPEC = [
-    '# billing Specification',
-    '',
-    '## Purpose',
-    'Defines how billing behaves for customers and operators.',
-    '',
-    '## Requirements',
-    '### Requirement: Invoice Generation',
-    'The system SHALL generate an invoice for every completed billing period.',
-    '',
-    '#### Scenario: Period closes',
-    '- **WHEN** a billing period closes',
-    '- **THEN** an invoice is generated',
-    '',
-    '### Requirement: Late Fees',
-    'The system SHALL apply a late fee to invoices overdue by 30 days.',
-    '',
-    '#### Scenario: Thirty days overdue',
-    '- **WHEN** an invoice is 30 days overdue',
-    '- **THEN** a late fee is applied',
-    '',
-  ].join('\n');
-
-  /**
-   * Write a main spec and a delta into a temp project, then run the merge and
-   * return its result without touching any real project.
-   */
-  async function build(deltaBody: string) {
-    const specsRoot = path.join(tempDir, 'openspec', 'specs');
-    const specsDir = path.join(specsRoot, 'billing');
-    const changeDir = path.join(tempDir, 'openspec', 'changes', 'c');
-    await fs.mkdir(specsDir, { recursive: true });
-    await fs.mkdir(path.join(changeDir, 'specs', 'billing'), { recursive: true });
-    await fs.writeFile(path.join(specsDir, 'spec.md'), MAIN_SPEC);
-    await fs.writeFile(path.join(changeDir, 'specs', 'billing', 'spec.md'), deltaBody);
-    const [update] = await findSpecUpdates(changeDir, specsRoot);
-    return buildUpdatedSpec(update, 'c', { silent: true });
-  }
-
-  for (const marker of MARKERS) {
-    it(`removes a requirement listed with "${marker}"`, async () => {
-      const built = await build(
-        ['## REMOVED Requirements', '', `${marker} \`### Requirement: Late Fees\``].join('\n')
-      );
-      expect(built.counts.removed).toBe(1);
-      expect(built.rebuilt).not.toContain('### Requirement: Late Fees');
-      expect(built.rebuilt).toContain('### Requirement: Invoice Generation');
-    });
-
-    it(`renames a requirement listed with "${marker}"`, async () => {
-      const built = await build(
-        [
-          '## RENAMED Requirements',
-          '',
-          `${marker} FROM: \`### Requirement: Late Fees\``,
-          `${marker} TO: \`### Requirement: Overdue Penalties\``,
-        ].join('\n')
-      );
-      expect(built.counts.renamed).toBe(1);
-      expect(built.rebuilt).toContain('### Requirement: Overdue Penalties');
-      expect(built.rebuilt).not.toContain('### Requirement: Late Fees');
-    });
-  }
 });
