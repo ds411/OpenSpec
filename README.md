@@ -116,6 +116,36 @@ Solo, OpenSpec keeps you and your AI honest on a single repo. On a team, the har
 
 > Stores are in **beta**. Start with the [Stores guide](https://openspec.dev/docs/stores).
 
+## Install this fork
+
+This fork ([ds411/OpenSpec](https://github.com/ds411/OpenSpec)) adds Gherkin specs with requirement IDs, `@trace` checks and `/opsx:scan` (see [CHANGELOG.md](CHANGELOG.md)). It keeps the package name `@fission-ai/openspec`, but it is not on npm or Homebrew.
+
+> [!IMPORTANT]
+> Every other install and upgrade command in this README and in the docs installs upstream OpenSpec from npm or Homebrew, and that replaces the fork. Use the commands in this section instead.
+
+You need Node.js 20.19.0 or higher and pnpm 10. If upstream OpenSpec is installed with a different package manager, remove it first, for example with `npm uninstall -g @fission-ai/openspec` or `brew uninstall openspec`.
+
+**With pnpm (recommended):**
+
+```bash
+pnpm add -g --allow-build=@fission-ai/openspec github:ds411/OpenSpec
+```
+
+If pnpm reports `ERR_PNPM_NO_GLOBAL_BIN_DIR`, run `pnpm setup` one time, open a new terminal and run the command again.
+
+**With npm:** `npm install -g github:ds411/OpenSpec` fails, because npm does not install the packages that the build needs. Build a package in a clone with pnpm, then install it with npm:
+
+```bash
+git clone https://github.com/ds411/OpenSpec.git && cd OpenSpec
+pnpm install --frozen-lockfile
+rm -f fission-ai-openspec-*.tgz && npm pack
+npm install -g ./fission-ai-openspec-*.tgz
+```
+
+**Check the install.** `which -a openspec` must show one path only, and `openspec --version` must end in `+fork.<N>`. Then, in each project, run `openspec update`. If a project has markdown specs (`spec.md`), run `openspec convert-specs` one time.
+
+**Update the fork.** Run the pnpm command again. For npm, run `git pull` in the clone, then the last three commands again. The fork turns the update check off, so the CLI does not tell you about a new version.
+
 ## Quick Start
 
 **Requires Node.js 20.19.0 or higher.** Homebrew installs it as a dependency.
@@ -192,6 +222,9 @@ AI coding assistants are powerful but unpredictable when requirements live only 
 **vs. nothing** — AI coding without specs means vague prompts and unpredictable results. OpenSpec brings predictability without the ceremony.
 
 ## Updating OpenSpec
+
+> [!IMPORTANT]
+> To update this fork, see [Install this fork](#install-this-fork). The `npm` and `brew` commands below install upstream OpenSpec.
 
 **Upgrade the package**
 
