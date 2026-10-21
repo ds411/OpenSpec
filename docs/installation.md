@@ -170,7 +170,7 @@ npm install -g @fission-ai/openspec@latest   # or pnpm/yarn/bun equivalent
 openspec update                              # run inside each project
 ```
 
-`openspec update` regenerates the skill and command files for the tools you've configured, so your slash commands stay current with the installed version. It also checks whether a newer CLI has been published and offers to upgrade, since upgrading is what makes new workflows available in the first place — see [CLI Reference](cli.md#openspec-update).
+`openspec update` regenerates the skill and command files for the tools you've configured, so your slash commands stay current with the installed version. It also checks whether a newer CLI has been published and offers to upgrade, since upgrading is what makes new workflows available in the first place — see [CLI Reference](cli.md#openspec-update). This fork turns that check off, because the package keeps the upstream name and the offer would install upstream over the fork.
 
 ## Uninstalling
 
