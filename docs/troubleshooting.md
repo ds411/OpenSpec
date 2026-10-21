@@ -51,7 +51,7 @@ If `/opsx:propose` (or your tool's equivalent) doesn't appear or doesn't do anyt
 
    This rewrites the skill and command files for every tool you've configured.
 
-   Instruction files come from the *installed* CLI, so an outdated CLI reports everything up to date without ever writing the newer workflows. `openspec update` now checks for that and offers to upgrade — take the offer if you see it.
+   Instruction files come from the *installed* CLI, so an outdated CLI reports everything up to date without ever writing the newer workflows. `openspec update` now checks for that and offers to upgrade — take the offer if you see it. This fork turns that check off, so upgrade the CLI yourself first.
 
 3. **Restart your assistant.** Most tools scan for skills and commands at startup. A fresh window often does it.
 

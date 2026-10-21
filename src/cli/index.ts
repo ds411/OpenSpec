@@ -851,6 +851,10 @@ newCmd
 export { program };
 
 export function runCli(argv = process.argv): void {
+  // This fork keeps upstream's npm name, so the update check would report every
+  // upstream release as newer and `openspec update` would offer to install
+  // upstream over the fork. The check stays off, as if the user had set this.
+  process.env.OPENSPEC_NO_UPDATE_CHECK ??= '1';
   program.parse(argv);
 }
 

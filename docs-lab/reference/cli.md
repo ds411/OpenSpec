@@ -153,7 +153,7 @@ openspec update           # refresh tools whose files are older than the CLI
 openspec update --force   # rewrite files even when they're current
 ```
 
-update finds the tools init configured and compares their generated files against the CLI's version. When a newer OpenSpec release exists, it first offers to upgrade the CLI, then reruns with the upgraded version. Set `OPENSPEC_NO_UPDATE_CHECK=1` to skip the check.
+update finds the tools init configured and compares their generated files against the CLI's version. When a newer OpenSpec release exists, it first offers to upgrade the CLI, then reruns with the upgraded version. Set `OPENSPEC_NO_UPDATE_CHECK=1` to skip the check. This fork always runs as if `OPENSPEC_NO_UPDATE_CHECK=1` were set, so it makes no check and no upgrade offer.
 
 **Arguments**
 
@@ -2518,7 +2518,7 @@ Update status values:
 | `disabled` | An existing privacy or update-check setting blocked registry access. `latest` is `null`. |
 | `offline` | The registry was unavailable or returned an unusable response. `latest` is `null`. |
 
-`DO_NOT_TRACK`, telemetry opt-outs, `OPENSPEC_NO_UPDATE_CHECK`, CI detection, and rejected non-HTTPS registry overrides disable the check. Disabled and offline checks still exit 0 because update availability is advisory. This command never upgrades OpenSpec; `canSelfUpgrade` only reports whether the existing `openspec update` path could safely upgrade this copy.
+`DO_NOT_TRACK`, telemetry opt-outs, `OPENSPEC_NO_UPDATE_CHECK`, CI detection, and rejected non-HTTPS registry overrides disable the check. This fork always sets `OPENSPEC_NO_UPDATE_CHECK`, so `--check` reports `disabled`. Disabled and offline checks still exit 0 because update availability is advisory. This command never upgrades OpenSpec; `canSelfUpgrade` only reports whether the existing `openspec update` path could safely upgrade this copy.
 
 **Exit codes**
 

@@ -1,5 +1,13 @@
 # @fission-ai/openspec
 
+## 1.14.3+fork.4
+
+Fork release on top of upstream 1.14.3. Fork versions are `<upstream version>+fork.<patch number>`.
+
+### Bug Fixes
+
+- **Update check off** — The CLI now always runs as if `OPENSPEC_NO_UPDATE_CHECK=1` were set. The fork keeps the upstream package name `@fission-ai/openspec`, so the check compared the fork with upstream releases on npm: it reported each newer upstream release as an update, and `openspec update` offered to run `npm install -g @fission-ai/openspec@latest`, which replaces the fork with upstream. Now `openspec update` sends no registry request and makes no upgrade offer, and `openspec version --check` reports the check as `disabled`.
+
 ## 1.14.3+fork.3
 
 Fork release on top of upstream 1.14.3. Fork versions are `<upstream version>+fork.<patch number>`.

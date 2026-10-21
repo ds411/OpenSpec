@@ -133,7 +133,7 @@ In your terminal, in each project where you ran init:
 openspec update
 ```
 
-When a newer CLI is out, [`openspec update`](../reference/cli.md#openspec-update) says so and can install it for you; that upgrade is once per machine. Every run refreshes the project's generated skills and commands, which never update on their own. A current project prints `✓ All 2 tool(s) up to date (v1.7.0)`.
+When a newer CLI is out, [`openspec update`](../reference/cli.md#openspec-update) says so and can install it for you; that upgrade is once per machine. This fork turns that check off, so upgrade the CLI yourself. Every run refreshes the project's generated skills and commands, which never update on their own. A current project prints `✓ All 2 tool(s) up to date (v1.7.0)`.
 
 
 > [!WARNING]
